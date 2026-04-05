@@ -1,0 +1,36 @@
+# Dependencies
+/vendor/
+
+# Environment and secrets
+/.env
+*.env
+!.env.example
+
+# State and runtime data
+/state.json
+/var/log/*
+/var/state/*
+/var/run/*
+!var/log/.gitkeep
+!var/state/.gitkeep
+!var/run/.gitkeep
+
+# Design docs
+/plan.md
+
+# Logs
+*.log
+
+# PHPUnit
+.phpunit.result.cache
+.phpunit.cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
