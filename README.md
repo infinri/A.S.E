@@ -1,4 +1,4 @@
-# A.S.E. -- Automated Security Evaluator
+# A.S.E. -- (All Seeing Eye)
 
 Lightweight PHP CLI tool that polls security feeds, deduplicates and prioritizes vulnerabilities using a three-signal system (CVSS + EPSS + KEV), and posts filtered alerts to Slack.
 
