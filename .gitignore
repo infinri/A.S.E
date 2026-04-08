@@ -25,9 +25,10 @@
 .phpunit.result.cache
 .phpunit.cache/
 
-# IDE
+# IDE and tools
 .idea/
 .vscode/
+.claude/
 *.swp
 *.swo
 

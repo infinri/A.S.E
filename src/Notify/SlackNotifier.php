@@ -50,14 +50,17 @@ final class SlackNotifier
             usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
         }
 
-        // P2: batched digest to alerts channel
-        $p2Alerts = $this->filterByPriority($newAlerts, Priority::P2);
-        if ($p2Alerts !== []) {
-            if ($this->sendMessage(
-                SlackMessage::digest($p2Alerts),
-                $this->config->slackChannelAlerts(),
-            )) {
-                $sent++;
+        // P2: batched digest to alerts channel (skipped if channel not configured)
+        $alertsChannel = $this->config->slackChannelAlerts();
+        if ($alertsChannel !== null) {
+            $p2Alerts = $this->filterByPriority($newAlerts, Priority::P2);
+            if ($p2Alerts !== []) {
+                if ($this->sendMessage(
+                    SlackMessage::digest($p2Alerts),
+                    $alertsChannel,
+                )) {
+                    $sent++;
+                }
             }
         }
 

@@ -229,21 +229,77 @@ if ($testAlert) {
     $vuln = $vuln->withPriority($testPriority);
     fwrite(STDOUT, "  Priority: {$testPriority->name} ({$testPriority->label()})\n");
 
-    fwrite(STDOUT, "Posting alert to Slack...\n");
-    $testMessage = SlackMessage::forVulnerability($vuln);
-    $slackResponse = $http->post(
-        $config->slackWebhookUrl(),
-        $testMessage->toPayload($config->slackChannelCritical()),
-    );
+    $webhookUrl = $config->slackWebhookUrl();
+    $criticalChannel = $config->slackChannelCritical();
+    $alertsChannel = $config->slackChannelAlerts();
+    $failed = false;
 
-    if ($slackResponse->isOk() && $slackResponse->body === 'ok') {
-        fwrite(STDOUT, "OK -- {$cveId} ({$testPriority->name}) posted to {$config->slackChannelCritical()}\n");
-        fwrite(STDOUT, "Check Slack to review the alert format.\n");
-        exit(0);
+    // P0: individual alert to critical channel
+    fwrite(STDOUT, "\n[P0] Posting to {$criticalChannel}...\n");
+    $p0Vuln = $vuln->withPriority(Priority::P0);
+    $p0Msg = SlackMessage::forVulnerability($p0Vuln);
+    $p0Response = $http->post($webhookUrl, $p0Msg->toPayload($criticalChannel));
+    if ($p0Response->isOk() && $p0Response->body === 'ok') {
+        fwrite(STDOUT, "  OK -- P0 (Immediate) sent\n");
+    } else {
+        fwrite(STDERR, "  FAILED -- HTTP {$p0Response->statusCode}: {$p0Response->body}\n");
+        $failed = true;
+    }
+    usleep(1_500_000);
+
+    // P1: individual alert to critical channel (without KEV flag so headline differs)
+    fwrite(STDOUT, "[P1] Posting to {$criticalChannel}...\n");
+    $p1Vuln = new Vulnerability(
+        canonicalId: $vuln->canonicalId,
+        aliases: $vuln->aliases,
+        description: $vuln->description,
+        cvssScore: $vuln->cvssScore,
+        cvssVector: $vuln->cvssVector,
+        epssScore: $vuln->epssScore,
+        epssPercentile: $vuln->epssPercentile,
+        inKev: false,
+        knownRansomware: false,
+        affectedPackages: $vuln->affectedPackages,
+        cwes: $vuln->cwes,
+        references: $vuln->references,
+        sources: $vuln->sources,
+        firstSeen: $vuln->firstSeen,
+        lastUpdated: $vuln->lastUpdated,
+        kevDateAdded: null,
+        kevDueDate: null,
+        kevRequiredAction: null,
+        affectsInstalledVersion: false,
+        priority: Priority::P1,
+        notifiedAtPriority: null,
+    );
+    $p1Msg = SlackMessage::forVulnerability($p1Vuln);
+    $p1Response = $http->post($webhookUrl, $p1Msg->toPayload($criticalChannel));
+    if ($p1Response->isOk() && $p1Response->body === 'ok') {
+        fwrite(STDOUT, "  OK -- P1 (Urgent) sent\n");
+    } else {
+        fwrite(STDERR, "  FAILED -- HTTP {$p1Response->statusCode}: {$p1Response->body}\n");
+        $failed = true;
+    }
+    usleep(1_500_000);
+
+    // P2: digest to alerts channel (skipped if not configured)
+    if ($alertsChannel !== null) {
+        fwrite(STDOUT, "[P2] Posting digest to {$alertsChannel}...\n");
+        $p2Vuln = $p1Vuln->withPriority(Priority::P2);
+        $p2Msg = SlackMessage::digest([$p2Vuln]);
+        $p2Response = $http->post($webhookUrl, $p2Msg->toPayload($alertsChannel));
+        if ($p2Response->isOk() && $p2Response->body === 'ok') {
+            fwrite(STDOUT, "  OK -- P2 (Soon) digest sent\n");
+        } else {
+            fwrite(STDERR, "  FAILED -- HTTP {$p2Response->statusCode}: {$p2Response->body}\n");
+            $failed = true;
+        }
+    } else {
+        fwrite(STDOUT, "[P2] Skipped -- SLACK_CHANNEL_ALERTS not configured\n");
     }
 
-    fwrite(STDERR, "FAILED -- Slack returned HTTP {$slackResponse->statusCode}: {$slackResponse->body}\n");
-    exit(1);
+    fwrite(STDOUT, "\nDone. Check Slack to review the alert formats.\n");
+    exit($failed ? 1 : 0);
 }
 
 try {

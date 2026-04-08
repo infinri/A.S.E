@@ -55,9 +55,9 @@ final class Config
         return $this->get('SLACK_CHANNEL_CRITICAL', '#security-critical');
     }
 
-    public function slackChannelAlerts(): string
+    public function slackChannelAlerts(): ?string
     {
-        return $this->get('SLACK_CHANNEL_ALERTS', '#security-alerts');
+        return $this->getOptional('SLACK_CHANNEL_ALERTS');
     }
 
     public function pollInterval(string $feed): int
