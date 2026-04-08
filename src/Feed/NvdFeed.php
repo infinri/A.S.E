@@ -72,7 +72,11 @@ final readonly class NvdFeed implements FeedInterface
             $response = $this->http->get($url, $headers);
 
             if (!$response->isOk()) {
-                $this->logger->error('NVD: HTTP error', ['status' => $response->statusCode]);
+                if ($response->statusCode === 404 && $apiKey !== null) {
+                    $this->logger->error('NVD: HTTP 404 -- this usually means the API key is invalid or expired. Verify NVD_API_KEY in your .env file.');
+                } else {
+                    $this->logger->error('NVD: HTTP error', ['status' => $response->statusCode]);
+                }
                 break;
             }
 

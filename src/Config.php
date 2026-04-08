@@ -148,6 +148,10 @@ final class Config
     private function getOptional(string $key): ?string
     {
         $value = $this->env[$key] ?? $_ENV[$key] ?? null;
-        return ($value !== null && $value !== '') ? $value : null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return trim($value);
     }
 }
