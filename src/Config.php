@@ -50,9 +50,9 @@ final class Config
         return $this->get('SLACK_WEBHOOK_URL');
     }
 
-    public function slackChannelCritical(): string
+    public function slackChannelCritical(): ?string
     {
-        return $this->get('SLACK_CHANNEL_CRITICAL', '#security-critical');
+        return $this->getOptional('SLACK_CHANNEL_CRITICAL');
     }
 
     public function slackChannelAlerts(): ?string

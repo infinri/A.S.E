@@ -28,26 +28,29 @@ final class SlackNotifier
     {
         $sent = 0;
 
-        // P0 and P1: individual messages to critical channel
-        foreach ($this->filterByPriority($newAlerts, Priority::P0, Priority::P1) as $vuln) {
-            if ($this->sendMessage(
-                SlackMessage::forVulnerability($vuln),
-                $this->config->slackChannelCritical(),
-            )) {
-                $sent++;
+        // P0 and P1: individual messages to critical channel (skipped if channel not configured)
+        $criticalChannel = $this->config->slackChannelCritical();
+        if ($criticalChannel !== null) {
+            foreach ($this->filterByPriority($newAlerts, Priority::P0, Priority::P1) as $vuln) {
+                if ($this->sendMessage(
+                    SlackMessage::forVulnerability($vuln),
+                    $criticalChannel,
+                )) {
+                    $sent++;
+                }
+                usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
             }
-            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
-        }
 
-        // Escalations: individual messages to critical channel
-        foreach ($escalations as $vuln) {
-            if ($this->sendMessage(
-                SlackMessage::forVulnerability($vuln, isEscalation: true),
-                $this->config->slackChannelCritical(),
-            )) {
-                $sent++;
+            // Escalations: individual messages to critical channel
+            foreach ($escalations as $vuln) {
+                if ($this->sendMessage(
+                    SlackMessage::forVulnerability($vuln, isEscalation: true),
+                    $criticalChannel,
+                )) {
+                    $sent++;
+                }
+                usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
             }
-            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
         }
 
         // P2: batched digest to alerts channel (skipped if channel not configured)
