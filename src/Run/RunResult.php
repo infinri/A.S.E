@@ -20,6 +20,7 @@ final readonly class RunResult
         public array $escalations,
         public ?MagentoEdition $magento,
         public bool $dryRun,
+        public string $runId,
     ) {}
 
     /**
@@ -31,6 +32,7 @@ final readonly class RunResult
         array $escalations,
         ?MagentoEdition $magento,
         bool $dryRun,
+        string $runId,
     ): self {
         $exitCode = 0;
 
@@ -50,6 +52,7 @@ final readonly class RunResult
             escalations: $escalations,
             magento: $magento,
             dryRun: $dryRun,
+            runId: $runId,
         );
     }
 
@@ -71,7 +74,7 @@ final readonly class RunResult
         }
 
         return [
-            'run_id' => null,
+            'run_id' => $this->runId,
             'magento' => $this->magento?->toArray(),
             'findings' => $findings,
             'summary' => $summary,

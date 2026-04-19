@@ -22,9 +22,13 @@ use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Health\DigestReporter;
 use Ase\Health\FeedHealthTracker;
 use Ase\Http\CurlClient;
+use Ase\Logging\CorrelationIdProcessor;
+use Ase\Logging\SecretRedactor;
+use Ase\Logging\SecretRedactorProcessor;
 use Ase\Notify\SlackNotifier;
 use Ase\Scoring\PriorityCalculator;
 use Ase\State\StateManager;
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\RotatingFileHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
@@ -69,7 +73,25 @@ if ($needsWebhook && $config->slackWebhookUrl() === null) {
     exit(2);
 }
 
-// Logger: rotating file + stderr
+// Secret redaction: mask known credentials in log output
+$secretRedactor = new SecretRedactor();
+$webhook = $config->slackWebhookUrl();
+if ($webhook !== null) {
+    $secretRedactor->registerSecret($webhook, 'slack-webhook');
+}
+$nvdKey = $config->nvdApiKey();
+if ($nvdKey !== null) {
+    $secretRedactor->registerSecret($nvdKey, 'nvd-api-key');
+}
+$ghToken = $config->githubToken();
+if ($ghToken !== null) {
+    $secretRedactor->registerSecret($ghToken, 'github-token');
+}
+
+// Correlation ID processor threads a per-run UUID into every log record
+$correlationIdProcessor = new CorrelationIdProcessor();
+
+// Logger: rotating file (human-readable) + stderr (JSON)
 $logger = new Logger('ase');
 $logPath = $config->logFilePath();
 $logDir = dirname($logPath);
@@ -77,7 +99,14 @@ if (!is_dir($logDir)) {
     @mkdir($logDir, 0755, true);
 }
 $logger->pushHandler(new RotatingFileHandler($logPath, 7, Logger::DEBUG));
-$logger->pushHandler(new StreamHandler('php://stderr', Logger::INFO));
+$stderrHandler = new StreamHandler('php://stderr', Logger::INFO);
+$stderrHandler->setFormatter(new JsonFormatter());
+$logger->pushHandler($stderrHandler);
+
+// Processors run in LIFO order: redactor pushed first so it is the final
+// transform applied before the handler writes.
+$logger->pushProcessor(new SecretRedactorProcessor($secretRedactor));
+$logger->pushProcessor($correlationIdProcessor);
 
 // HTTP client
 $http = new CurlClient($logger);
@@ -116,6 +145,7 @@ $ase = new Ase(
     healthTracker: $healthTracker,
     digestReporter: $digestReporter,
     logger: $logger,
+    correlationIdProcessor: $correlationIdProcessor,
 );
 
 // --test-slack: send a test message and exit

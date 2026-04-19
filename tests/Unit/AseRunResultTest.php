@@ -12,6 +12,7 @@ use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Health\DigestReporter;
 use Ase\Health\FeedHealthTracker;
 use Ase\Http\CurlClient;
+use Ase\Logging\CorrelationIdProcessor;
 use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
@@ -284,7 +285,34 @@ final class AseRunResultTest extends TestCase
             healthTracker: $healthTracker,
             digestReporter: $digestReporter,
             logger: $logger,
+            correlationIdProcessor: new CorrelationIdProcessor(),
         );
+    }
+
+    #[Test]
+    public function testRunResultContainsGeneratedRunId(): void
+    {
+        $feed = new StubFeed('test', [$this->makeVuln(Priority::P2)]);
+        $ase = $this->buildAse($feed, new SpySlackNotifier());
+
+        $result = $ase->run(dryRun: true);
+
+        self::assertMatchesRegularExpression(
+            '/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/',
+            $result->runId,
+        );
+    }
+
+    #[Test]
+    public function testTwoRunsProduceDistinctRunIds(): void
+    {
+        $feed = new StubFeed('test', [$this->makeVuln(Priority::P2)]);
+        $ase = $this->buildAse($feed, new SpySlackNotifier());
+
+        $first = $ase->run(dryRun: true);
+        $second = $ase->run(dryRun: true);
+
+        self::assertNotSame($first->runId, $second->runId);
     }
 }
 

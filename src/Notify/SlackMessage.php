@@ -272,6 +272,25 @@ final class SlackMessage
             $buttons[] = ['type' => 'button', 'text' => ['type' => 'plain_text', 'text' => 'NVD'], 'url' => $nvdUrl];
         }
 
+        foreach ($vuln->affectedPackages as $pkg) {
+            if ($pkg->ecosystem !== 'composer') {
+                continue;
+            }
+            if (substr_count($pkg->name, '/') !== 1) {
+                continue;
+            }
+            [$vendor, $name] = explode('/', $pkg->name, 2);
+            if ($vendor === '' || $name === '') {
+                continue;
+            }
+            $buttons[] = [
+                'type' => 'button',
+                'text' => ['type' => 'plain_text', 'text' => 'Packagist'],
+                'url' => "https://packagist.org/packages/{$pkg->name}",
+            ];
+            break;
+        }
+
         foreach (array_slice($vuln->references, 0, 2) as $ref) {
             $parsed = parse_url($ref, PHP_URL_HOST);
             $host = is_string($parsed) ? $parsed : '';

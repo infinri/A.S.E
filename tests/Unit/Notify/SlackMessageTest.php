@@ -347,4 +347,93 @@ final class SlackMessageTest extends TestCase
             notifiedAtPriority: null,
         );
     }
+
+    #[Test]
+    public function testBuildIncludesPackagistButtonForComposerPackage(): void
+    {
+        $vuln = $this->makeVuln(
+            affectedPackages: [
+                new AffectedPackage(
+                    ecosystem: 'composer',
+                    name: 'magento/framework',
+                    vulnerableRange: '<2.4.7-p3',
+                    fixedVersion: '2.4.7-p3',
+                ),
+            ],
+        );
+
+        $msg = SlackMessage::forVulnerability($vuln)->toPayload();
+
+        $buttons = $this->extractButtons($msg);
+        $packagist = array_values(array_filter(
+            $buttons,
+            fn (array $b): bool => ($b['text']['text'] ?? '') === 'Packagist',
+        ));
+        self::assertCount(1, $packagist);
+        self::assertSame('https://packagist.org/packages/magento/framework', $packagist[0]['url']);
+    }
+
+    #[Test]
+    public function testBuildOmitsPackagistButtonForNonComposerEcosystem(): void
+    {
+        $vuln = $this->makeVuln(
+            affectedPackages: [
+                new AffectedPackage(
+                    ecosystem: 'npm',
+                    name: 'react',
+                    vulnerableRange: '<18.0.0',
+                    fixedVersion: '18.0.0',
+                ),
+            ],
+        );
+
+        $msg = SlackMessage::forVulnerability($vuln)->toPayload();
+
+        $labels = array_map(
+            fn (array $b): string => (string) ($b['text']['text'] ?? ''),
+            $this->extractButtons($msg),
+        );
+        self::assertNotContains('Packagist', $labels);
+    }
+
+    #[Test]
+    public function testBuildHandlesComposerPackageWithoutSlashGracefully(): void
+    {
+        $vuln = $this->makeVuln(
+            affectedPackages: [
+                new AffectedPackage(
+                    ecosystem: 'composer',
+                    name: 'magento-framework',
+                    vulnerableRange: '<1.0.0',
+                    fixedVersion: '1.0.0',
+                ),
+            ],
+        );
+
+        $msg = SlackMessage::forVulnerability($vuln)->toPayload();
+
+        $labels = array_map(
+            fn (array $b): string => (string) ($b['text']['text'] ?? ''),
+            $this->extractButtons($msg),
+        );
+        self::assertNotContains('Packagist', $labels);
+    }
+
+    /**
+     * @param array<string, mixed> $msg
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractButtons(array $msg): array
+    {
+        /** @var array<int, array<string, mixed>> $blocks */
+        $blocks = $msg['blocks'] ?? ($msg['attachments'][0]['blocks'] ?? []);
+        foreach ($blocks as $block) {
+            if (($block['type'] ?? '') === 'actions') {
+                /** @var array<int, array<string, mixed>> $elements */
+                $elements = $block['elements'] ?? [];
+                return $elements;
+            }
+        }
+        return [];
+    }
 }

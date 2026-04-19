@@ -10,6 +10,7 @@ use Ase\Feed\FeedInterface;
 use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Health\DigestReporter;
 use Ase\Health\FeedHealthTracker;
+use Ase\Logging\CorrelationIdProcessor;
 use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
@@ -17,6 +18,7 @@ use Ase\Notify\SlackNotifier;
 use Ase\Run\RunResult;
 use Ase\Scoring\PriorityCalculator;
 use Ase\State\StateManager;
+use Ase\Support\CorrelationId;
 use Psr\Log\LoggerInterface;
 
 final class Ase
@@ -34,11 +36,24 @@ final class Ase
         private readonly FeedHealthTracker $healthTracker,
         private readonly DigestReporter $digestReporter,
         private readonly LoggerInterface $logger,
+        private readonly CorrelationIdProcessor $correlationIdProcessor,
     ) {}
 
     public function run(bool $dryRun = false): RunResult
     {
-        $this->logger->info('A.S.E. run started', ['dry_run' => $dryRun]);
+        $runId = CorrelationId::generate();
+        $this->correlationIdProcessor->setRunId($runId);
+
+        try {
+            return $this->runInternal($dryRun, $runId);
+        } finally {
+            $this->correlationIdProcessor->setRunId(null);
+        }
+    }
+
+    private function runInternal(bool $dryRun, string $runId): RunResult
+    {
+        $this->logger->info('A.S.E. run started', ['dry_run' => $dryRun, 'run_id' => $runId]);
 
         $state = $this->stateManager->load();
         $isFirstRun = $this->stateManager->isFirstRun();
@@ -64,7 +79,7 @@ final class Ase
         if ($this->allBatchesEmpty($batches)) {
             $this->logger->info('No new vulnerabilities from any feed');
             $this->finalize($state, $isFirstRun, $dryRun);
-            return RunResult::fromClassification([], [], $magento, $dryRun);
+            return RunResult::fromClassification([], [], $magento, $dryRun, $runId);
         }
 
         // Merge new data into existing state
@@ -130,7 +145,7 @@ final class Ase
 
         $this->finalize($state, $isFirstRun, $dryRun);
 
-        return RunResult::fromClassification($newAlerts, $escalations, $magento, $dryRun);
+        return RunResult::fromClassification($newAlerts, $escalations, $magento, $dryRun, $runId);
     }
 
     /**

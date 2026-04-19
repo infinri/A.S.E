@@ -14,10 +14,12 @@ use PHPUnit\Framework\TestCase;
 
 final class RunResultTest extends TestCase
 {
+    private const FIXED_RUN_ID = '11111111-1111-4111-8111-111111111111';
+
     #[Test]
     public function testFromClassificationExitCode0WhenNoAlerts(): void
     {
-        $result = RunResult::fromClassification([], [], null, false);
+        $result = RunResult::fromClassification([], [], null, false, self::FIXED_RUN_ID);
         self::assertSame(0, $result->exitCode);
     }
 
@@ -29,6 +31,7 @@ final class RunResultTest extends TestCase
             [],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(1, $result->exitCode);
     }
@@ -41,6 +44,7 @@ final class RunResultTest extends TestCase
             [],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(2, $result->exitCode);
     }
@@ -53,6 +57,7 @@ final class RunResultTest extends TestCase
             [],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(2, $result->exitCode);
     }
@@ -66,6 +71,7 @@ final class RunResultTest extends TestCase
             [$this->makeVuln(Priority::P0)],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(2, $result->exitCode);
         self::assertCount(1, $result->newAlerts);
@@ -84,6 +90,7 @@ final class RunResultTest extends TestCase
             [],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(0, $result->exitCode);
     }
@@ -91,7 +98,7 @@ final class RunResultTest extends TestCase
     #[Test]
     public function testToJsonArrayShape(): void
     {
-        $result = RunResult::fromClassification([], [], null, false);
+        $result = RunResult::fromClassification([], [], null, false, self::FIXED_RUN_ID);
         $json = $result->toJsonArray();
 
         self::assertArrayHasKey('run_id', $json);
@@ -99,7 +106,7 @@ final class RunResultTest extends TestCase
         self::assertArrayHasKey('findings', $json);
         self::assertArrayHasKey('summary', $json);
         self::assertArrayHasKey('exit_code', $json);
-        self::assertNull($json['run_id']);
+        self::assertSame(self::FIXED_RUN_ID, $json['run_id']);
         self::assertNull($json['magento']);
         self::assertSame([], $json['findings']);
         self::assertSame(
@@ -113,7 +120,7 @@ final class RunResultTest extends TestCase
     public function testToJsonArraySerializesMagento(): void
     {
         $magento = new MagentoEdition('magento-community', '2.4.7', 'magento/product-community-edition');
-        $result = RunResult::fromClassification([], [], $magento, false);
+        $result = RunResult::fromClassification([], [], $magento, false, self::FIXED_RUN_ID);
         $json = $result->toJsonArray();
 
         self::assertSame(
@@ -132,7 +139,7 @@ final class RunResultTest extends TestCase
         $newAlerts = [$this->makeVuln(Priority::P0), $this->makeVuln(Priority::P2)];
         $escalations = [$this->makeVuln(Priority::P1)];
 
-        $result = RunResult::fromClassification($newAlerts, $escalations, null, false);
+        $result = RunResult::fromClassification($newAlerts, $escalations, null, false, self::FIXED_RUN_ID);
         $json = $result->toJsonArray();
 
         self::assertCount(3, $json['findings']);
@@ -151,6 +158,7 @@ final class RunResultTest extends TestCase
             [],
             null,
             false,
+            self::FIXED_RUN_ID,
         );
         self::assertSame(2, $result->toJsonArray()['exit_code']);
     }
@@ -158,10 +166,10 @@ final class RunResultTest extends TestCase
     #[Test]
     public function testDryRunFlagPropagated(): void
     {
-        $dry = RunResult::fromClassification([], [], null, true);
+        $dry = RunResult::fromClassification([], [], null, true, self::FIXED_RUN_ID);
         self::assertTrue($dry->dryRun);
 
-        $live = RunResult::fromClassification([], [], null, false);
+        $live = RunResult::fromClassification([], [], null, false, self::FIXED_RUN_ID);
         self::assertFalse($live->dryRun);
     }
 
@@ -193,5 +201,25 @@ final class RunResultTest extends TestCase
             priority: $priority,
             notifiedAtPriority: null,
         );
+    }
+
+    #[Test]
+    public function testToJsonArrayIncludesRunId(): void
+    {
+        $runId = '00000000-0000-4000-8000-000000000000';
+        $result = RunResult::fromClassification([], [], null, false, $runId);
+
+        $json = $result->toJsonArray();
+
+        self::assertSame($runId, $json['run_id']);
+    }
+
+    #[Test]
+    public function testRunIdIsReadableOnResult(): void
+    {
+        $runId = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+        $result = RunResult::fromClassification([], [], null, false, $runId);
+
+        self::assertSame($runId, $result->runId);
     }
 }
