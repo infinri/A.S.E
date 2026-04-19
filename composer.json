@@ -1,8 +1,30 @@
 {
-    "name": "2ndswing/ase",
-    "description": "Automated Security Evaluator - lightweight vulnerability monitoring",
-    "type": "project",
-    "license": "proprietary",
+    "name": "infinri/ase",
+    "description": "Automated Security Evaluator -- CVE monitoring for Magento / Adobe Commerce / Mage-OS stores. Polls KEV/NVD/GHSA/OSV/Packagist, prioritizes with CVSS+EPSS+KEV, alerts via Slack.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": [
+        "magento",
+        "adobe-commerce",
+        "mage-os",
+        "security",
+        "vulnerability",
+        "cve",
+        "monitoring",
+        "cli",
+        "composer",
+        "slack"
+    ],
+    "authors": [
+        {
+            "name": "Lucio Saldivar",
+            "email": "lucio.saldivar@infinri.com"
+        }
+    ],
+    "support": {
+        "issues": "https://github.com/infinri/A.S.E/issues",
+        "source": "https://github.com/infinri/A.S.E"
+    },
     "require": {
         "php": "^8.4",
         "composer/semver": "^3.4",
@@ -23,6 +45,14 @@
             "Ase\\Tests\\": "tests/"
         }
     },
+    "bin": [
+        "bin/ase"
+    ],
+    "scripts": {
+        "test": "phpunit tests/Unit",
+        "stan": "phpstan analyse --level=8 src"
+    },
+    "minimum-stability": "stable",
     "config": {
         "sort-packages": true
     }

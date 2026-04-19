@@ -10,9 +10,11 @@ use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Psr\Log\LoggerInterface;
 
-final class SlackNotifier
+class SlackNotifier
 {
     private const float THROTTLE_SECONDS = 1.5;
+
+    private bool $warnedNoWebhook = false;
 
     public function __construct(
         private readonly CurlClient $client,
@@ -80,8 +82,17 @@ final class SlackNotifier
 
     private function sendMessage(SlackMessage $message, ?string $channel): bool
     {
+        $webhookUrl = $this->config->slackWebhookUrl();
+        if ($webhookUrl === null) {
+            if (!$this->warnedNoWebhook) {
+                $this->logger->warning('Slack webhook not configured; skipping message');
+                $this->warnedNoWebhook = true;
+            }
+            return false;
+        }
+
         $payload = $message->toPayload($channel);
-        $response = $this->client->post($this->config->slackWebhookUrl(), $payload);
+        $response = $this->client->post($webhookUrl, $payload);
 
         if (!$response->isOk() || $response->body !== 'ok') {
             $this->logger->error('Slack notification failed', [

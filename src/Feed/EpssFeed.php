@@ -8,7 +8,7 @@ use Ase\Http\CurlClient;
 use Ase\Model\Vulnerability;
 use Psr\Log\LoggerInterface;
 
-final class EpssFeed
+class EpssFeed
 {
     private const string BASE_URL = 'https://api.first.org/data/v1/epss';
     private const int BATCH_SIZE = 100;

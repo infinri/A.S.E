@@ -15,9 +15,12 @@ final class Config
     {
         $path = $envPath ?? dirname(__DIR__);
 
-        if (file_exists($path . '/.env')) {
-            $dotenv = Dotenv::createImmutable($path);
-            $dotenv->load();
+        $skipDotenv = getenv('ASE_SKIP_DOTENV');
+        if ($skipDotenv === false || $skipDotenv === '' || $skipDotenv === '0') {
+            if (file_exists($path . '/.env')) {
+                $dotenv = Dotenv::createImmutable($path);
+                $dotenv->load();
+            }
         }
 
         $this->env = $_ENV;
@@ -45,9 +48,9 @@ final class Config
         return $this->getOptional('GITHUB_TOKEN');
     }
 
-    public function slackWebhookUrl(): string
+    public function slackWebhookUrl(): ?string
     {
-        return $this->get('SLACK_WEBHOOK_URL');
+        return $this->getOptional('SLACK_WEBHOOK_URL');
     }
 
     public function slackChannelCritical(): ?string
@@ -102,7 +105,34 @@ final class Config
 
     public function composerLockPath(): ?string
     {
+        $cwd = getcwd();
+        $walkUp = $this->findComposerLockUpwards($cwd === false ? null : $cwd);
+        if ($walkUp !== null) {
+            return $walkUp;
+        }
+
         return $this->getOptional('COMPOSER_LOCK_PATH');
+    }
+
+    private function findComposerLockUpwards(?string $startDir): ?string
+    {
+        if ($startDir === null || $startDir === '') {
+            return null;
+        }
+
+        $dir = $startDir;
+        while (true) {
+            $candidate = $dir . DIRECTORY_SEPARATOR . 'composer.lock';
+            if (is_file($candidate)) {
+                return $candidate;
+            }
+
+            $parent = dirname($dir);
+            if ($parent === $dir) {
+                return null;
+            }
+            $dir = $parent;
+        }
     }
 
     public function epssHighThreshold(): float
@@ -142,12 +172,26 @@ final class Config
 
     private function get(string $key, string $default = ''): string
     {
-        return $this->env[$key] ?? $_ENV[$key] ?? $default;
+        if (isset($this->env[$key])) {
+            return $this->env[$key];
+        }
+        if (isset($_ENV[$key])) {
+            return $_ENV[$key];
+        }
+        $envValue = getenv($key);
+        if ($envValue !== false) {
+            return $envValue;
+        }
+        return $default;
     }
 
     private function getOptional(string $key): ?string
     {
         $value = $this->env[$key] ?? $_ENV[$key] ?? null;
+        if ($value === null) {
+            $envValue = getenv($key);
+            $value = $envValue === false ? null : $envValue;
+        }
         if ($value === null || $value === '') {
             return null;
         }

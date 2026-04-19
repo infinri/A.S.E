@@ -14,6 +14,7 @@ use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
 use Ase\Notify\SlackNotifier;
+use Ase\Run\RunResult;
 use Ase\Scoring\PriorityCalculator;
 use Ase\State\StateManager;
 use Psr\Log\LoggerInterface;
@@ -35,9 +36,9 @@ final class Ase
         private readonly LoggerInterface $logger,
     ) {}
 
-    public function run(): void
+    public function run(bool $dryRun = false): RunResult
     {
-        $this->logger->info('A.S.E. run started');
+        $this->logger->info('A.S.E. run started', ['dry_run' => $dryRun]);
 
         $state = $this->stateManager->load();
         $isFirstRun = $this->stateManager->isFirstRun();
@@ -46,13 +47,24 @@ final class Ase
             $this->logger->info('First run detected: silent import mode');
         }
 
+        $magento = $this->composerLockAnalyzer->detectMagentoEdition();
+        if ($magento !== null) {
+            $this->logger->info('Magento edition detected', [
+                'edition' => $magento->edition,
+                'version' => $magento->version,
+                'package' => $magento->packageName,
+            ]);
+        } else {
+            $this->logger->info('Magento edition not detected');
+        }
+
         // Poll enabled feeds
         $batches = $this->pollFeeds($state);
 
         if ($this->allBatchesEmpty($batches)) {
             $this->logger->info('No new vulnerabilities from any feed');
-            $this->finalize($state, $isFirstRun);
-            return;
+            $this->finalize($state, $isFirstRun, $dryRun);
+            return RunResult::fromClassification([], [], $magento, $dryRun);
         }
 
         // Merge new data into existing state
@@ -89,32 +101,36 @@ final class Ase
             }
         }
 
-        // Send notifications
-        if ($newAlerts !== [] || $escalations !== []) {
-            $sent = $this->slackNotifier->sendAlerts($newAlerts, $escalations);
+        if (!$dryRun) {
+            // Send notifications
+            if ($newAlerts !== [] || $escalations !== []) {
+                $sent = $this->slackNotifier->sendAlerts($newAlerts, $escalations);
 
-            // Mark notified
-            foreach ([...$newAlerts, ...$escalations] as $vuln) {
-                $allVulns[$vuln->canonicalId] = $vuln->withNotifiedAtPriority($vuln->priority);
+                // Mark notified
+                foreach ([...$newAlerts, ...$escalations] as $vuln) {
+                    $allVulns[$vuln->canonicalId] = $vuln->withNotifiedAtPriority($vuln->priority);
+                }
+
+                $state['stats']['total_notified'] = ($state['stats']['total_notified'] ?? 0) + count($newAlerts);
+                $state['stats']['total_escalations'] = ($state['stats']['total_escalations'] ?? 0) + count($escalations);
+
+                $this->logger->info('Notifications sent', [
+                    'new' => count($newAlerts),
+                    'escalations' => count($escalations),
+                    'slack_messages' => $sent,
+                ]);
             }
 
-            $state['stats']['total_notified'] = ($state['stats']['total_notified'] ?? 0) + count($newAlerts);
-            $state['stats']['total_escalations'] = ($state['stats']['total_escalations'] ?? 0) + count($escalations);
-
-            $this->logger->info('Notifications sent', [
-                'new' => count($newAlerts),
-                'escalations' => count($escalations),
-                'slack_messages' => $sent,
-            ]);
+            // Serialize vulnerabilities back to state
+            $state['vulnerabilities'] = [];
+            foreach ($allVulns as $vuln) {
+                $state['vulnerabilities'][$vuln->canonicalId] = $vuln->toArray();
+            }
         }
 
-        // Serialize vulnerabilities back to state
-        $state['vulnerabilities'] = [];
-        foreach ($allVulns as $vuln) {
-            $state['vulnerabilities'][$vuln->canonicalId] = $vuln->toArray();
-        }
+        $this->finalize($state, $isFirstRun, $dryRun);
 
-        $this->finalize($state, $isFirstRun);
+        return RunResult::fromClassification($newAlerts, $escalations, $magento, $dryRun);
     }
 
     /**
@@ -220,8 +236,16 @@ final class Ase
     }
 
     /** @param array<string, mixed> $state */
-    private function finalize(array $state, bool $isFirstRun): void
+    private function finalize(array $state, bool $isFirstRun, bool $dryRun): void
     {
+        if ($dryRun) {
+            $this->logger->info('A.S.E. run complete', [
+                'tracked' => count($state['vulnerabilities'] ?? []),
+                'dry_run' => true,
+            ]);
+            return;
+        }
+
         // Weekly digest
         $lastDigest = $state['stats']['last_digest'] ?? null;
         if (!$isFirstRun && $this->digestReporter->shouldPostDigest($lastDigest)) {

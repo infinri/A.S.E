@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ase\Filter;
 
 use Ase\Config;
+use Ase\Model\MagentoEdition;
 use Ase\Model\Vulnerability;
 use Composer\Semver\Semver;
 use Psr\Log\LoggerInterface;
@@ -18,6 +19,38 @@ final class ComposerLockAnalyzer
         private readonly Config $config,
         private readonly LoggerInterface $logger,
     ) {}
+
+    public function detectMagentoEdition(): ?MagentoEdition
+    {
+        $lockPath = $this->config->composerLockPath();
+        if ($lockPath === null || $lockPath === '') {
+            return null;
+        }
+
+        $installed = $this->loadInstalledPackages($lockPath);
+        if ($installed === []) {
+            return null;
+        }
+
+        $candidates = [
+            'magento-enterprise' => 'magento/product-enterprise-edition',
+            'magento-community' => 'magento/product-community-edition',
+            'mage-os-community' => 'mage-os/product-community-edition',
+        ];
+
+        foreach ($candidates as $edition => $packageName) {
+            $version = $installed[$packageName] ?? null;
+            if ($version !== null) {
+                return new MagentoEdition(
+                    edition: $edition,
+                    version: $version,
+                    packageName: $packageName,
+                );
+            }
+        }
+
+        return null;
+    }
 
     /**
      * @param array<string, Vulnerability> $vulnerabilities

@@ -53,4 +53,15 @@ final class ConfigTestHelper
             'CVSS_MEDIUM_THRESHOLD' => '4.0',
         ]);
     }
+
+    /**
+     * Creates a Config without SLACK_WEBHOOK_URL set, for dry-run / JSON-format tests.
+     *
+     * @param array<string, string> $extra Additional env keys to include (SLACK_WEBHOOK_URL is omitted).
+     */
+    public static function withoutWebhook(array $extra = []): Config
+    {
+        unset($extra['SLACK_WEBHOOK_URL']);
+        return self::create($extra);
+    }
 }

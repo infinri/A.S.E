@@ -33,6 +33,8 @@ use Monolog\Logger;
 $sinceDate = null;
 $testSlack = false;
 $testAlert = false;
+$dryRun = false;
+$format = 'human';
 foreach ($argv as $i => $arg) {
     if ($arg === '--since' && isset($argv[$i + 1])) {
         $sinceDate = $argv[$i + 1];
@@ -43,10 +45,29 @@ foreach ($argv as $i => $arg) {
     if ($arg === '--test-alert') {
         $testAlert = true;
     }
+    if ($arg === '--dry-run') {
+        $dryRun = true;
+    }
+    if (str_starts_with($arg, '--format=')) {
+        $format = substr($arg, strlen('--format='));
+    } elseif ($arg === '--format' && isset($argv[$i + 1])) {
+        $format = $argv[$i + 1];
+    }
+}
+
+if (!in_array($format, ['human', 'json'], true)) {
+    fwrite(STDERR, "Unknown --format value: {$format}\n");
+    exit(2);
 }
 
 // Bootstrap
 $config = new Config(sinceDate: $sinceDate);
+
+$needsWebhook = !$dryRun && $format === 'human' && !$testSlack && !$testAlert;
+if ($needsWebhook && $config->slackWebhookUrl() === null) {
+    fwrite(STDERR, "SLACK_WEBHOOK_URL is required for normal runs. Use --dry-run or --format=json to scan without notifications.\n");
+    exit(2);
+}
 
 // Logger: rotating file + stderr
 $logger = new Logger('ase');
@@ -99,6 +120,12 @@ $ase = new Ase(
 
 // --test-slack: send a test message and exit
 if ($testSlack) {
+    $webhookUrl = $config->slackWebhookUrl();
+    if ($webhookUrl === null) {
+        fwrite(STDERR, "SLACK_WEBHOOK_URL is required for --test-slack\n");
+        exit(2);
+    }
+
     $payload = [
         'channel' => $config->slackChannelCritical(),
         'blocks' => [
@@ -116,7 +143,7 @@ if ($testSlack) {
         ],
     ];
 
-    $response = $http->post($config->slackWebhookUrl(), $payload);
+    $response = $http->post($webhookUrl, $payload);
 
     if ($response->isOk() && $response->body === 'ok') {
         fwrite(STDOUT, "OK -- test message sent to {$config->slackChannelCritical()}\n");
@@ -129,6 +156,12 @@ if ($testSlack) {
 
 // --test-alert: fetch CVE-2024-34102 (CosmicSting) from NVD + EPSS, build a real alert, post to Slack
 if ($testAlert) {
+    $testAlertWebhookUrl = $config->slackWebhookUrl();
+    if ($testAlertWebhookUrl === null) {
+        fwrite(STDERR, "SLACK_WEBHOOK_URL is required for --test-alert\n");
+        exit(2);
+    }
+
     $cveId = 'CVE-2024-34102';
     fwrite(STDOUT, "Fetching {$cveId} from NVD...\n");
 
@@ -229,7 +262,7 @@ if ($testAlert) {
     $vuln = $vuln->withPriority($testPriority);
     fwrite(STDOUT, "  Priority: {$testPriority->name} ({$testPriority->label()})\n");
 
-    $webhookUrl = $config->slackWebhookUrl();
+    $webhookUrl = $testAlertWebhookUrl;
     $criticalChannel = $config->slackChannelCritical();
     $alertsChannel = $config->slackChannelAlerts();
     $failed = false;
@@ -303,8 +336,11 @@ if ($testAlert) {
 }
 
 try {
-    $ase->run();
-    exit(0);
+    $result = $ase->run(dryRun: $dryRun);
+    if ($format === 'json') {
+        fwrite(STDOUT, json_encode($result->toJsonArray(), JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
+    }
+    exit($result->exitCode);
 } catch (Throwable $e) {
     $logger->critical('Unhandled exception', [
         'message' => $e->getMessage(),

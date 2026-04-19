@@ -16,15 +16,25 @@ use Psr\Log\NullLogger;
 final class ComposerLockAnalyzerTest extends TestCase
 {
     private string $tmpDir;
+    private string $originalCwd;
 
     protected function setUp(): void
     {
+        $this->originalCwd = getcwd() ?: sys_get_temp_dir();
         $this->tmpDir = sys_get_temp_dir() . '/ase_lock_test_' . uniqid();
         mkdir($this->tmpDir, 0755, true);
+        // chdir into an empty sub-dir so Config::composerLockPath() walk-up
+        // does not discover the ase project's own composer.lock.
+        $cwdScratch = $this->tmpDir . '/cwd';
+        mkdir($cwdScratch, 0755, true);
+        chdir($cwdScratch);
     }
 
     protected function tearDown(): void
     {
+        chdir($this->originalCwd);
+        $cwdScratch = $this->tmpDir . '/cwd';
+        @rmdir($cwdScratch);
         $files = glob($this->tmpDir . '/*');
         if ($files !== false) {
             array_map('unlink', $files);
@@ -164,6 +174,101 @@ final class ComposerLockAnalyzerTest extends TestCase
         $result = $analyzer->checkInstalledVersions(['CVE-1' => $vuln]);
 
         self::assertTrue($result['CVE-1']->affectsInstalledVersion);
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionDetectsCommunity(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-community-edition', 'version' => '2.4.7'],
+        ]);
+
+        $edition = $this->makeAnalyzer($lockPath)->detectMagentoEdition();
+
+        self::assertNotNull($edition);
+        self::assertSame('magento-community', $edition->edition);
+        self::assertSame('2.4.7', $edition->version);
+        self::assertSame('magento/product-community-edition', $edition->packageName);
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionDetectsEnterprise(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-enterprise-edition', 'version' => '2.4.8'],
+        ]);
+
+        $edition = $this->makeAnalyzer($lockPath)->detectMagentoEdition();
+
+        self::assertNotNull($edition);
+        self::assertSame('magento-enterprise', $edition->edition);
+        self::assertSame('2.4.8', $edition->version);
+        self::assertSame('magento/product-enterprise-edition', $edition->packageName);
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionDetectsMageOs(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'mage-os/product-community-edition', 'version' => '1.0.0'],
+        ]);
+
+        $edition = $this->makeAnalyzer($lockPath)->detectMagentoEdition();
+
+        self::assertNotNull($edition);
+        self::assertSame('mage-os-community', $edition->edition);
+        self::assertSame('1.0.0', $edition->version);
+        self::assertSame('mage-os/product-community-edition', $edition->packageName);
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionPrefersEnterpriseWhenBothPresent(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-community-edition', 'version' => '2.4.7'],
+            ['name' => 'magento/product-enterprise-edition', 'version' => '2.4.8'],
+        ]);
+
+        $edition = $this->makeAnalyzer($lockPath)->detectMagentoEdition();
+
+        self::assertNotNull($edition);
+        self::assertSame('magento-enterprise', $edition->edition);
+        self::assertSame('2.4.8', $edition->version);
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionReturnsNullWhenNotFound(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'monolog/monolog', 'version' => '3.0.0'],
+        ]);
+
+        self::assertNull($this->makeAnalyzer($lockPath)->detectMagentoEdition());
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionReturnsNullWhenNoLockPathConfigured(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+        ]);
+
+        $analyzer = new ComposerLockAnalyzer($config, new NullLogger());
+
+        self::assertNull($analyzer->detectMagentoEdition());
+    }
+
+    #[Test]
+    public function testDetectMagentoEditionStripsVPrefixFromVersion(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-community-edition', 'version' => 'v2.4.7'],
+        ]);
+
+        $edition = $this->makeAnalyzer($lockPath)->detectMagentoEdition();
+
+        self::assertNotNull($edition);
+        self::assertSame('2.4.7', $edition->version);
     }
 
     private function makeAnalyzer(string $lockPath): ComposerLockAnalyzer

@@ -13,6 +13,8 @@ final class DigestReporter
 {
     private const string DIGEST_DAY = 'Sunday';
 
+    private bool $warnedNoWebhook = false;
+
     public function __construct(
         private readonly CurlClient $client,
         private readonly Config $config,
@@ -38,6 +40,15 @@ final class DigestReporter
     /** @param array<string, mixed> $state */
     public function postDigest(array $state): bool
     {
+        $webhookUrl = $this->config->slackWebhookUrl();
+        if ($webhookUrl === null) {
+            if (!$this->warnedNoWebhook) {
+                $this->logger->warning('Slack webhook not configured; skipping digest');
+                $this->warnedNoWebhook = true;
+            }
+            return false;
+        }
+
         $stats = $state['stats'] ?? [];
         $feedHealth = $state['feed_health'] ?? [];
         $vulnCount = count($state['vulnerabilities'] ?? []);
@@ -74,7 +85,7 @@ final class DigestReporter
             ],
         ];
 
-        $response = $this->client->post($this->config->slackWebhookUrl(), $payload);
+        $response = $this->client->post($webhookUrl, $payload);
 
         if (!$response->isOk()) {
             $this->logger->error('Failed to post weekly digest', [
