@@ -102,7 +102,8 @@ EpssFeed (enrichment, batches of 100 CVEs)
 Deduplicator (alias-aware merge across all feeds)
   |
   v
-ComposerLockAnalyzer (optional: flags installed vulnerable versions)
+ComposerLockAnalyzer (flags installed vulnerable versions; needs COMPOSER_LOCK_PATH in production,
+                       auto-discovered via walk-up for ad-hoc runs inside the project)
   |
   v
 PriorityCalculator (CVSS + EPSS + KEV -> P0, P1, or filtered out)
@@ -501,8 +502,11 @@ GITHUB_TOKEN=ghp_xxxxx              # 83x rate limit improvement
 ### Optional
 
 ```bash
-# Cross-reference your installed packages
-COMPOSER_LOCK_PATH=/path/to/composer.lock
+# Cross-reference your installed packages.
+# REQUIRED for production deploys where ASE lives outside the Magento project
+# (cron under /opt/ase, containers, etc.). Auto-discovery via walk-up from
+# getcwd() only works when ASE is invoked from inside the project tree.
+COMPOSER_LOCK_PATH=/var/www/magento/composer.lock
 
 # Feed selection (default: all)
 ENABLED_FEEDS=kev,nvd,ghsa,osv,packagist

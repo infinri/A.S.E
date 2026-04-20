@@ -46,13 +46,16 @@ composer global require infinri/ase
 # Minimal config: one Slack webhook
 export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
 
-# Walk into your Magento project and scan without sending alerts
+# Walk into your Magento project and scan without sending alerts.
+# (Auto-discovery walks up from CWD to find composer.lock -- no env var needed.)
 cd /path/to/your/magento/project
 ase --dry-run --format=json
 
 # Optional: verify your webhook wiring before scheduling under cron
 ase --test-alert
 ```
+
+For production / cron deploys where ASE lives outside the Magento project (e.g. installed under `/opt/ase`), set `COMPOSER_LOCK_PATH` in `.env` to the absolute path of the project's `composer.lock`. Auto-discovery only works when `getcwd()` is somewhere inside the project tree -- cron jobs rarely are.
 
 `--dry-run` doesn't touch Slack or persist state. `--format=json` emits a machine-readable report to stdout; operational logs stream to **stderr in JSON format (one object per line)**, so `--format=json` output on stdout is always clean for piping into `jq`, CI artifacts, or a log shipper. Together they're the safe way to evaluate ASE before wiring it into a real channel.
 
@@ -96,7 +99,7 @@ Configuration is env-driven. Either export variables in your shell, drop them in
 |---|---|---|
 | `NVD_API_KEY` | Free NVD API key (lifts rate limit from 5 to 50 req/30s) | none |
 | `GITHUB_TOKEN` | GitHub PAT, public scope is enough (higher GHSA rate limit) | none |
-| `COMPOSER_LOCK_PATH` | Explicit path to your project's `composer.lock`. Only needed if ASE can't find one by walking up from CWD. | auto-discovered |
+| `COMPOSER_LOCK_PATH` | Absolute path to the Magento project's `composer.lock`. **Required whenever ASE runs from a directory that isn't inside the project** (production cron under `/opt/ase`, containerized deploys, etc.). Auto-discovery via walk-up from `getcwd()` only works for ad-hoc invocations launched from the project tree. | none |
 | `SLACK_WEBHOOK_P1` | Optional second webhook for P1 alerts. When unset, P1 alerts are silently skipped (logged as a warning). | none |
 
 ### Feed control
@@ -168,7 +171,10 @@ cd /opt/ase
 composer install --no-dev --optimize-autoloader
 
 cp .env.example .env
-# edit .env
+# edit .env -- at minimum set:
+#   SLACK_WEBHOOK_URL   (P0 alerts)
+#   COMPOSER_LOCK_PATH  (absolute path to your Magento project's composer.lock;
+#                        required because cron does not cd into the project)
 
 sudo mkdir -p /var/lib/ase /var/log/ase /var/run/ase
 sudo chown "$(whoami)" /var/lib/ase /var/log/ase /var/run/ase
