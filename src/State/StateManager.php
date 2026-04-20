@@ -22,7 +22,6 @@ final class StateManager
             'total_tracked' => 0,
             'total_notified' => 0,
             'total_escalations' => 0,
-            'last_digest' => null,
         ],
     ];
 
@@ -73,8 +72,41 @@ final class StateManager
             return $this->state;
         }
 
-        $this->state = array_merge(self::DEFAULT_STATE, $decoded);
+        $merged = array_merge(self::DEFAULT_STATE, $decoded);
+        $this->state = $this->prunePreP4LegacyPriorities($merged);
         return $this->state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    private function prunePreP4LegacyPriorities(array $state): array
+    {
+        /** @var array<string, array<string, mixed>> $vulns */
+        $vulns = $state['vulnerabilities'] ?? [];
+        $allowed = ['P0', 'P1'];
+        $pruned = 0;
+
+        foreach ($vulns as $id => $data) {
+            $priority = $data['priority'] ?? null;
+            $notifiedAt = $data['notified_at_priority'] ?? null;
+
+            $priorityLegacy = is_string($priority) && !in_array($priority, $allowed, true);
+            $notifiedLegacy = is_string($notifiedAt) && !in_array($notifiedAt, $allowed, true);
+
+            if ($priorityLegacy || $notifiedLegacy) {
+                unset($vulns[$id]);
+                $pruned++;
+            }
+        }
+
+        if ($pruned > 0) {
+            $this->logger->info('Pruned legacy priority entries', ['count' => $pruned]);
+            $state['vulnerabilities'] = $vulns;
+        }
+
+        return $state;
     }
 
     /** @param array<string, mixed> $state */

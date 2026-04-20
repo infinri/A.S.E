@@ -15,6 +15,7 @@ class SlackNotifier
     private const float THROTTLE_SECONDS = 1.5;
 
     private bool $warnedNoWebhook = false;
+    private bool $warnedNoP1Webhook = false;
 
     public function __construct(
         private readonly CurlClient $client,
@@ -30,59 +31,55 @@ class SlackNotifier
     {
         $sent = 0;
 
-        // P0 and P1: individual messages to critical channel (skipped if channel not configured)
-        $criticalChannel = $this->config->slackChannelCritical();
-        if ($criticalChannel !== null) {
-            foreach ($this->filterByPriority($newAlerts, Priority::P0, Priority::P1) as $vuln) {
-                if ($this->sendMessage(
-                    SlackMessage::forVulnerability($vuln),
-                    $criticalChannel,
-                )) {
-                    $sent++;
-                }
-                usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
-            }
+        $p0New = $this->filterByPriority($newAlerts, Priority::P0);
+        $p1New = $this->filterByPriority($newAlerts, Priority::P1);
+        $p0Escalations = $this->filterByPriority($escalations, Priority::P0);
+        $p1Escalations = $this->filterByPriority($escalations, Priority::P1);
 
-            // Escalations: individual messages to critical channel
-            foreach ($escalations as $vuln) {
-                if ($this->sendMessage(
-                    SlackMessage::forVulnerability($vuln, isEscalation: true),
-                    $criticalChannel,
-                )) {
-                    $sent++;
-                }
-                usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
+        $p0Webhook = $this->config->slackWebhookUrl();
+        foreach ($p0New as $vuln) {
+            if ($this->postToWebhook($p0Webhook, SlackMessage::forVulnerability($vuln), 'P0')) {
+                $sent++;
             }
+            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
+        }
+        foreach ($p0Escalations as $vuln) {
+            if ($this->postToWebhook($p0Webhook, SlackMessage::forVulnerability($vuln, isEscalation: true), 'P0')) {
+                $sent++;
+            }
+            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
         }
 
-        // P2: batched digest to alerts channel (skipped if channel not configured)
-        $alertsChannel = $this->config->slackChannelAlerts();
-        if ($alertsChannel !== null) {
-            $p2Alerts = $this->filterByPriority($newAlerts, Priority::P2);
-            if ($p2Alerts !== []) {
-                if ($this->sendMessage(
-                    SlackMessage::digest($p2Alerts),
-                    $alertsChannel,
-                )) {
-                    $sent++;
-                }
+        $p1Webhook = $this->config->slackWebhookP1();
+        $p1Count = count($p1New) + count($p1Escalations);
+        if ($p1Webhook === null) {
+            if ($p1Count > 0 && !$this->warnedNoP1Webhook) {
+                $this->logger->warning('P1 findings present but SLACK_WEBHOOK_P1 not configured; skipping alerts', [
+                    'skipped' => $p1Count,
+                ]);
+                $this->warnedNoP1Webhook = true;
             }
+            return $sent;
+        }
+
+        foreach ($p1New as $vuln) {
+            if ($this->postToWebhook($p1Webhook, SlackMessage::forVulnerability($vuln), 'P1')) {
+                $sent++;
+            }
+            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
+        }
+        foreach ($p1Escalations as $vuln) {
+            if ($this->postToWebhook($p1Webhook, SlackMessage::forVulnerability($vuln, isEscalation: true), 'P1')) {
+                $sent++;
+            }
+            usleep((int) (self::THROTTLE_SECONDS * 1_000_000));
         }
 
         return $sent;
     }
 
-    /** @param array<string, mixed> $stats */
-    public function sendWeeklyDigest(array $stats): bool
+    private function postToWebhook(?string $webhookUrl, SlackMessage $message, string $tier): bool
     {
-        $msg = new SlackMessage();
-        // Build a simple stats message - the DigestReporter handles the content
-        return $this->sendMessage($msg, $this->config->slackChannelAlerts());
-    }
-
-    private function sendMessage(SlackMessage $message, ?string $channel): bool
-    {
-        $webhookUrl = $this->config->slackWebhookUrl();
         if ($webhookUrl === null) {
             if (!$this->warnedNoWebhook) {
                 $this->logger->warning('Slack webhook not configured; skipping message');
@@ -91,19 +88,19 @@ class SlackNotifier
             return false;
         }
 
-        $payload = $message->toPayload($channel);
+        $payload = $message->toPayload();
         $response = $this->client->post($webhookUrl, $payload);
 
         if (!$response->isOk() || $response->body !== 'ok') {
             $this->logger->error('Slack notification failed', [
                 'status' => $response->statusCode,
                 'body' => mb_substr($response->body, 0, 200),
-                'channel' => $channel,
+                'tier' => $tier,
             ]);
             return false;
         }
 
-        $this->logger->info('Slack notification sent', ['channel' => $channel]);
+        $this->logger->info('Slack notification sent', ['tier' => $tier]);
         return true;
     }
 
@@ -115,7 +112,7 @@ class SlackNotifier
     {
         return array_values(array_filter(
             $vulns,
-            static fn(Vulnerability $v): bool => in_array($v->priority, $priorities, true),
+            static fn (Vulnerability $v): bool => in_array($v->priority, $priorities, true),
         ));
     }
 }

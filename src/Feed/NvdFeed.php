@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ase\Feed;
 
 use Ase\Config;
+use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Http\CurlClient;
 use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
@@ -21,6 +22,7 @@ final readonly class NvdFeed implements FeedInterface
         private CurlClient $http,
         private Config $config,
         private LoggerInterface $logger,
+        private ComposerLockAnalyzer $composerLockAnalyzer,
     ) {}
 
     #[\Override]
@@ -48,7 +50,7 @@ final readonly class NvdFeed implements FeedInterface
             'lastModEndDate' => $now->format('Y-m-d\TH:i:s.000+00:00'),
         ];
 
-        $cpePrefix = $this->config->nvdCpePrefix();
+        $cpePrefix = $this->config->nvdCpePrefix() ?? $this->composerLockAnalyzer->detectCpePrefix();
         if ($cpePrefix !== null) {
             $params['cpeName'] = $cpePrefix;
         }
@@ -149,7 +151,7 @@ final readonly class NvdFeed implements FeedInterface
             kevDueDate: $cve['cisaActionDue'] ?? null,
             kevRequiredAction: $cve['cisaRequiredAction'] ?? null,
             affectsInstalledVersion: false,
-            priority: Priority::P4,
+            priority: Priority::P1,
             notifiedAtPriority: null,
         );
     }

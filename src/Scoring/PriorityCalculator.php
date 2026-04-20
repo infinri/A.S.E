@@ -14,17 +14,15 @@ final class PriorityCalculator
         private readonly Config $config,
     ) {}
 
-    public function classify(Vulnerability $vuln): Priority
+    public function classify(Vulnerability $vuln): ?Priority
     {
         $cvss = $vuln->cvssScore ?? $this->fallbackCvssFromSeverity($vuln);
         $epss = $vuln->epssScore;
         $epssHigh = $this->config->epssHighThreshold();
-        $epssMedium = $this->config->epssMediumThreshold();
         $cvssCritical = $this->config->cvssCriticalThreshold();
         $cvssHigh = $this->config->cvssHighThreshold();
-        $cvssMedium = $this->config->cvssMediumThreshold();
 
-        // P0: In KEV, or CVSS >= 9.0 AND EPSS >= 10%
+        // P0: in KEV, or CVSS >= critical AND EPSS >= high
         if ($vuln->inKev) {
             return Priority::P0;
         }
@@ -32,7 +30,7 @@ final class PriorityCalculator
             return Priority::P0;
         }
 
-        // P1: CVSS >= 7.0 AND EPSS >= 10%, or ransomware, or affects installed AND CVSS >= 7.0
+        // P1: (CVSS >= high AND EPSS >= high) OR ransomware OR (affects installed AND CVSS >= high)
         if ($vuln->knownRansomware) {
             return Priority::P1;
         }
@@ -43,20 +41,7 @@ final class PriorityCalculator
             return Priority::P1;
         }
 
-        // P2: CVSS >= 7.0 OR EPSS >= 5%
-        if ($cvss !== null && $cvss >= $cvssHigh) {
-            return Priority::P2;
-        }
-        if ($epss !== null && $epss >= $epssMedium) {
-            return Priority::P2;
-        }
-
-        // P3: CVSS >= 4.0 AND EPSS < 5%
-        if ($cvss !== null && $cvss >= $cvssMedium) {
-            return Priority::P3;
-        }
-
-        return Priority::P4;
+        return null;
     }
 
     /**
@@ -65,10 +50,15 @@ final class PriorityCalculator
      */
     public function classifyAll(array $vulnerabilities): array
     {
-        return array_map(
-            fn(Vulnerability $v): Vulnerability => $v->withPriority($this->classify($v)),
-            $vulnerabilities,
-        );
+        $classified = [];
+        foreach ($vulnerabilities as $key => $vuln) {
+            $priority = $this->classify($vuln);
+            if ($priority === null) {
+                continue;
+            }
+            $classified[$key] = $vuln->withPriority($priority);
+        }
+        return $classified;
     }
 
     private function fallbackCvssFromSeverity(Vulnerability $vuln): ?float

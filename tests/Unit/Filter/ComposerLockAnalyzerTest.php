@@ -271,6 +271,98 @@ final class ComposerLockAnalyzerTest extends TestCase
         self::assertSame('2.4.7', $edition->version);
     }
 
+    #[Test]
+    public function testDetectEcosystemsReturnsComposerWhenLockPresent(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/framework', 'version' => '103.0.0'],
+        ]);
+
+        self::assertSame(['composer'], $this->makeAnalyzer($lockPath)->detectEcosystems());
+    }
+
+    #[Test]
+    public function testDetectEcosystemsReturnsEmptyWhenNoLock(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+        ]);
+
+        self::assertSame([], (new ComposerLockAnalyzer($config, new NullLogger()))->detectEcosystems());
+    }
+
+    #[Test]
+    public function testDetectVendorsReturnsUniqueVendorPrefixes(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/framework', 'version' => '103.0.0'],
+            ['name' => 'magento/module-catalog', 'version' => '104.0.0'],
+            ['name' => 'amasty/shipping', 'version' => '1.2.3'],
+        ]);
+
+        $vendors = $this->makeAnalyzer($lockPath)->detectVendors();
+        sort($vendors);
+
+        self::assertSame(['amasty', 'magento'], $vendors);
+    }
+
+    #[Test]
+    public function testDetectVendorsSkipsPackagesWithoutSlash(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'weirdname', 'version' => '1.0.0'],
+            ['name' => 'magento/framework', 'version' => '103.0.0'],
+        ]);
+
+        self::assertSame(['magento'], $this->makeAnalyzer($lockPath)->detectVendors());
+    }
+
+    #[Test]
+    public function testDetectCpePrefixMapsCommunityToMagento(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-community-edition', 'version' => '2.4.7'],
+        ]);
+
+        self::assertSame(
+            'cpe:2.3:a:magento:magento',
+            $this->makeAnalyzer($lockPath)->detectCpePrefix(),
+        );
+    }
+
+    #[Test]
+    public function testDetectCpePrefixMapsEnterpriseToAdobe(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/product-enterprise-edition', 'version' => '2.4.7'],
+        ]);
+
+        self::assertSame(
+            'cpe:2.3:a:adobe:commerce',
+            $this->makeAnalyzer($lockPath)->detectCpePrefix(),
+        );
+    }
+
+    #[Test]
+    public function testDetectCpePrefixReturnsNullForMageOs(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'mage-os/product-community-edition', 'version' => '1.0.0'],
+        ]);
+
+        self::assertNull($this->makeAnalyzer($lockPath)->detectCpePrefix());
+    }
+
+    #[Test]
+    public function testDetectCpePrefixReturnsNullWhenNoMagentoEdition(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'monolog/monolog', 'version' => '3.0.0'],
+        ]);
+
+        self::assertNull($this->makeAnalyzer($lockPath)->detectCpePrefix());
+    }
+
     private function makeAnalyzer(string $lockPath): ComposerLockAnalyzer
     {
         $config = ConfigTestHelper::create([
@@ -314,7 +406,7 @@ final class ComposerLockAnalyzerTest extends TestCase
             kevDueDate: null,
             kevRequiredAction: null,
             affectsInstalledVersion: false,
-            priority: Priority::P4,
+            priority: Priority::P1,
             notifiedAtPriority: null,
         );
     }

@@ -13,7 +13,7 @@ Most teams land in one of two failure modes:
 - **Alert fatigue.** A generic CVE feed pipes every CVSS >= 7 into Slack. After day three, the channel is muted. After week one, a real P0 gets missed.
 - **Blind spots.** The team subscribes to a single source (usually Adobe's security bulletin) and misses KEV additions, Packagist advisories for third-party modules, and EPSS spikes on old CVEs.
 
-ASE closes both gaps. It polls all five feeds, deduplicates across them, filters against your `composer.lock` so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and routes the output by severity: P0/P1 as individual Slack alerts, P2 as a digest, P3/P4 to logs only. First run imports the current state silently so you don't get a 40-alert Monday morning. Subsequent runs alert on new findings and priority escalations.
+ASE closes both gaps. It polls all five feeds, deduplicates across them, filters against your `composer.lock` so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal. First run imports the current state silently so you don't get a 40-alert Monday morning. Subsequent runs alert on new findings and priority escalations.
 
 It is a CLI. It runs under cron. It exits `0`, `1`, or `2` based on what it found, so you can gate a CI pipeline on it. That's the whole surface.
 
@@ -57,7 +57,7 @@ Flags:
   --format=<human|json>    Output format (default: human)
   --since <YYYY-MM-DD>     Backfill from a specific date (first run only)
   --test-slack             Send a test message to the configured channel and exit
-  --test-alert             Send sample P0/P1/P2 alerts for wiring verification
+  --test-alert             Send a P0 sample (and a P1 sample if SLACK_WEBHOOK_P1 is set) for wiring verification
 
 Exit codes:
   0                        No P0 or P1 finding in the alertable set
@@ -84,17 +84,16 @@ Configuration is env-driven. Either export variables in your shell, drop them in
 | `NVD_API_KEY` | Free NVD API key (lifts rate limit from 5 to 50 req/30s) | none |
 | `GITHUB_TOKEN` | GitHub PAT, public scope is enough (higher GHSA rate limit) | none |
 | `COMPOSER_LOCK_PATH` | Explicit path to your project's `composer.lock`. Only needed if ASE can't find one by walking up from CWD. | auto-discovered |
-| `SLACK_CHANNEL_CRITICAL` | Channel override for P0/P1 (leave empty to disable) | webhook default |
-| `SLACK_CHANNEL_ALERTS` | Channel override for P2 digests (leave empty to disable) | webhook default |
+| `SLACK_WEBHOOK_P1` | Optional second webhook for P1 alerts. When unset, P1 alerts are silently skipped (logged as a warning). | none |
 
 ### Feed control
 
 | Variable | Description | Default |
 |---|---|---|
 | `ENABLED_FEEDS` | Comma-separated list of feeds to poll | `kev,nvd,ghsa,osv,packagist` |
-| `ECOSYSTEMS` | Comma-separated ecosystems to monitor | `composer,npm` |
-| `VENDOR_FILTER` | Comma-separated vendor names for KEV filtering | `adobe,magento` |
-| `NVD_CPE_PREFIX` | CPE prefix for NVD tech-stack filtering | none |
+| `ECOSYSTEMS` | **Additive** -- merged with `composer` (auto-detected from your lockfile) | empty |
+| `VENDOR_FILTER` | **Additive** -- merged with vendor names parsed from your `composer.lock` (KEV filtering) | empty |
+| `NVD_CPE_PREFIX` | **Override** -- if set, replaces the auto-detected CPE. Auto-detection maps Magento edition: community -> `cpe:2.3:a:magento:magento`, enterprise -> `cpe:2.3:a:adobe:commerce` | auto |
 
 ### Poll intervals (seconds)
 
@@ -111,20 +110,19 @@ Configuration is env-driven. Either export variables in your shell, drop them in
 | Variable | Default | Description |
 |---|---|---|
 | `CVSS_CRITICAL_THRESHOLD` | 9.0 | P0 trigger when combined with EPSS |
-| `CVSS_HIGH_THRESHOLD` | 7.0 | P1/P2 boundary |
-| `CVSS_MEDIUM_THRESHOLD` | 4.0 | P3/P4 boundary |
+| `CVSS_HIGH_THRESHOLD` | 7.0 | P1 boundary |
 | `EPSS_HIGH_THRESHOLD` | 0.10 | 10% exploit probability threshold |
-| `EPSS_MEDIUM_THRESHOLD` | 0.05 | 5% exploit probability threshold |
 
 ## Priority system
 
+ASE only tracks and alerts on P0 and P1 findings. Anything below those thresholds is dropped before notification or persistence.
+
 | Priority | Criteria | Notification |
 |---|---|---|
-| **P0** Immediate | In CISA KEV, OR (CVSS >= 9.0 AND EPSS >= 10%) | Individual alert, exit code 2 |
-| **P1** Urgent | (CVSS >= 7.0 AND EPSS >= 10%), OR known ransomware, OR affects installed version with CVSS >= 7.0 | Individual alert, exit code 1 |
-| **P2** Soon | CVSS >= 7.0 OR EPSS >= 5% | Batched digest |
-| **P3** Monitor | CVSS >= 4.0 AND EPSS < 5% | Log only |
-| **P4** Track | Everything else | Log only |
+| **P0** Immediate | In CISA KEV, OR (CVSS >= 9.0 AND EPSS >= 10%) | `SLACK_WEBHOOK_URL`, exit code 2 |
+| **P1** Urgent | (CVSS >= 7.0 AND EPSS >= 10%), OR known ransomware, OR affects installed version with CVSS >= 7.0 | `SLACK_WEBHOOK_P1` if set, else skipped with a one-line warning. Exit code 1. |
+
+**Two-webhook model.** Slack incoming webhooks are channel-scoped. P0 always posts to `SLACK_WEBHOOK_URL` -- the only required webhook. P1 posts to a separate `SLACK_WEBHOOK_P1` webhook when you want those alerts in a different channel; leave it unset to suppress P1 alerts entirely.
 
 **Escalation re-notification:** If a vulnerability's priority increases (e.g., added to CISA KEV, EPSS spike), a new alert fires with escalation context, even if previously notified at a lower tier.
 
@@ -188,7 +186,6 @@ ENABLED_FEEDS=kev,nvd,ghsa
 
 - **Heartbeat:** `bin/heartbeat.sh` alerts via syslog if the last successful run was >24h ago.
 - **Feed health:** consecutive failures per feed are tracked; 3+ failures logs ERROR.
-- **Weekly digest:** Sunday summary to Slack covering feed health, tracked vulnerabilities, and state file size.
 - **Schema drift:** warnings on missing expected fields in API responses.
 
 ## Requirements

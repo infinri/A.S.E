@@ -53,14 +53,9 @@ final class Config
         return $this->getOptional('SLACK_WEBHOOK_URL');
     }
 
-    public function slackChannelCritical(): ?string
+    public function slackWebhookP1(): ?string
     {
-        return $this->getOptional('SLACK_CHANNEL_CRITICAL');
-    }
-
-    public function slackChannelAlerts(): ?string
-    {
-        return $this->getOptional('SLACK_CHANNEL_ALERTS');
+        return $this->getOptional('SLACK_WEBHOOK_P1');
     }
 
     public function pollInterval(string $feed): int
@@ -140,11 +135,6 @@ final class Config
         return (float) $this->get('EPSS_HIGH_THRESHOLD', '0.10');
     }
 
-    public function epssMediumThreshold(): float
-    {
-        return (float) $this->get('EPSS_MEDIUM_THRESHOLD', '0.05');
-    }
-
     public function cvssCriticalThreshold(): float
     {
         return (float) $this->get('CVSS_CRITICAL_THRESHOLD', '9.0');
@@ -153,11 +143,6 @@ final class Config
     public function cvssHighThreshold(): float
     {
         return (float) $this->get('CVSS_HIGH_THRESHOLD', '7.0');
-    }
-
-    public function cvssMediumThreshold(): float
-    {
-        return (float) $this->get('CVSS_MEDIUM_THRESHOLD', '4.0');
     }
 
     public function sinceDate(): ?string

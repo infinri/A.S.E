@@ -251,7 +251,7 @@ final class DeduplicatorTest extends TestCase
             kevDueDate: null,
             kevRequiredAction: null,
             affectsInstalledVersion: false,
-            priority: Priority::P4,
+            priority: Priority::P1,
             notifiedAtPriority: null,
         );
     }

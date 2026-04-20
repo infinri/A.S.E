@@ -9,7 +9,6 @@ use Ase\Dedup\Deduplicator;
 use Ase\Feed\EpssFeed;
 use Ase\Feed\FeedInterface;
 use Ase\Filter\ComposerLockAnalyzer;
-use Ase\Health\DigestReporter;
 use Ase\Health\FeedHealthTracker;
 use Ase\Http\CurlClient;
 use Ase\Logging\CorrelationIdProcessor;
@@ -107,7 +106,7 @@ final class AseRunResultTest extends TestCase
     #[Test]
     public function testRunWithDryRunTrueDoesNotSaveState(): void
     {
-        $feed = new StubFeed('test', [$this->makeVuln(Priority::P2)]);
+        $feed = new StubFeed('test', [$this->makeVuln(Priority::P1)]);
         $spy = new SpySlackNotifier();
 
         $ase = $this->buildAse($feed, $spy);
@@ -271,7 +270,6 @@ final class AseRunResultTest extends TestCase
         $priorityCalculator = new PriorityCalculator($config);
         $composerLockAnalyzer = new ComposerLockAnalyzer($config, $logger);
         $healthTracker = new FeedHealthTracker($logger);
-        $digestReporter = new DigestReporter(new CurlClient($logger), $config, $logger);
 
         return new Ase(
             config: $config,
@@ -283,7 +281,6 @@ final class AseRunResultTest extends TestCase
             composerLockAnalyzer: $composerLockAnalyzer,
             slackNotifier: $spy,
             healthTracker: $healthTracker,
-            digestReporter: $digestReporter,
             logger: $logger,
             correlationIdProcessor: new CorrelationIdProcessor(),
         );
@@ -292,7 +289,7 @@ final class AseRunResultTest extends TestCase
     #[Test]
     public function testRunResultContainsGeneratedRunId(): void
     {
-        $feed = new StubFeed('test', [$this->makeVuln(Priority::P2)]);
+        $feed = new StubFeed('test', [$this->makeVuln(Priority::P1)]);
         $ase = $this->buildAse($feed, new SpySlackNotifier());
 
         $result = $ase->run(dryRun: true);
@@ -306,7 +303,7 @@ final class AseRunResultTest extends TestCase
     #[Test]
     public function testTwoRunsProduceDistinctRunIds(): void
     {
-        $feed = new StubFeed('test', [$this->makeVuln(Priority::P2)]);
+        $feed = new StubFeed('test', [$this->makeVuln(Priority::P1)]);
         $ase = $this->buildAse($feed, new SpySlackNotifier());
 
         $first = $ase->run(dryRun: true);

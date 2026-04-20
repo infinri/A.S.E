@@ -101,7 +101,7 @@ final readonly class PackagistAdvisoryFeed implements FeedInterface
                     kevDueDate: null,
                     kevRequiredAction: null,
                     affectsInstalledVersion: false,
-                    priority: Priority::P4,
+                    priority: Priority::P1,
                     notifiedAtPriority: null,
                 );
             }

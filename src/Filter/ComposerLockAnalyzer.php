@@ -22,12 +22,7 @@ final class ComposerLockAnalyzer
 
     public function detectMagentoEdition(): ?MagentoEdition
     {
-        $lockPath = $this->config->composerLockPath();
-        if ($lockPath === null || $lockPath === '') {
-            return null;
-        }
-
-        $installed = $this->loadInstalledPackages($lockPath);
+        $installed = $this->loadInstalled();
         if ($installed === []) {
             return null;
         }
@@ -52,19 +47,64 @@ final class ComposerLockAnalyzer
         return null;
     }
 
+    /** @return string[] */
+    public function detectEcosystems(): array
+    {
+        return $this->loadInstalled() === [] ? [] : ['composer'];
+    }
+
+    /** @return string[] */
+    public function detectVendors(): array
+    {
+        $installed = $this->loadInstalled();
+        if ($installed === []) {
+            return [];
+        }
+
+        $vendors = [];
+        foreach (array_keys($installed) as $name) {
+            $slash = strpos($name, '/');
+            if ($slash === false || $slash === 0) {
+                continue;
+            }
+            $vendor = substr($name, 0, $slash);
+            $vendors[$vendor] = true;
+        }
+
+        return array_keys($vendors);
+    }
+
+    public function detectCpePrefix(): ?string
+    {
+        $edition = $this->detectMagentoEdition();
+        if ($edition === null) {
+            return null;
+        }
+
+        return match ($edition->edition) {
+            'magento-enterprise' => 'cpe:2.3:a:adobe:commerce',
+            'magento-community' => 'cpe:2.3:a:magento:magento',
+            default => null,
+        };
+    }
+
+    /** @return array<string, string> */
+    private function loadInstalled(): array
+    {
+        $lockPath = $this->config->composerLockPath();
+        if ($lockPath === null || $lockPath === '') {
+            return [];
+        }
+        return $this->loadInstalledPackages($lockPath);
+    }
+
     /**
      * @param array<string, Vulnerability> $vulnerabilities
      * @return array<string, Vulnerability>
      */
     public function checkInstalledVersions(array $vulnerabilities): array
     {
-        $lockPath = $this->config->composerLockPath();
-
-        if ($lockPath === null || $lockPath === '') {
-            return $vulnerabilities;
-        }
-
-        $installed = $this->loadInstalledPackages($lockPath);
+        $installed = $this->loadInstalled();
 
         if ($installed === []) {
             return $vulnerabilities;

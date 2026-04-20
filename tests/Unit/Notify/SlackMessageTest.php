@@ -50,7 +50,7 @@ final class SlackMessageTest extends TestCase
     public function escalationHeadlineShowsEscalated(): void
     {
         $vuln = $this->makeVuln(priority: Priority::P0)
-            ->withNotifiedAtPriority(Priority::P2);
+            ->withNotifiedAtPriority(Priority::P1);
 
         $payload = SlackMessage::forVulnerability($vuln, isEscalation: true)->toPayload();
         $header = $payload['attachments'][0]['blocks'][0]['text']['text'];
@@ -61,12 +61,12 @@ final class SlackMessageTest extends TestCase
     #[Test]
     public function genericVulnUsesUrgencyLabel(): void
     {
-        $vuln = $this->makeVuln(priority: Priority::P2);
+        $vuln = $this->makeVuln(priority: Priority::P1);
 
         $payload = SlackMessage::forVulnerability($vuln)->toPayload();
         $header = $payload['attachments'][0]['blocks'][0]['text']['text'];
 
-        self::assertStringContainsString('Action Needed', $header);
+        self::assertStringContainsString('URGENT', $header);
     }
 
     #[Test]
@@ -247,33 +247,6 @@ final class SlackMessageTest extends TestCase
     }
 
     #[Test]
-    public function digestCreatesListOfVulnerabilities(): void
-    {
-        $vulns = [
-            $this->makeVuln(id: 'CVE-2025-0001', cvssScore: 9.8),
-            $this->makeVuln(id: 'CVE-2025-0002', cvssScore: 7.0),
-        ];
-
-        $payload = SlackMessage::digest($vulns)->toPayload();
-        $blocks = $payload['attachments'][0]['blocks'];
-
-        self::assertStringContainsString('2 vulnerabilities', $blocks[0]['text']['text']);
-        self::assertStringContainsString('CVE-2025-0001', $blocks[1]['text']['text']);
-    }
-
-    #[Test]
-    public function digestTruncatesAt20(): void
-    {
-        $vulns = [];
-        for ($i = 1; $i <= 25; $i++) {
-            $vulns[] = $this->makeVuln(id: sprintf('CVE-2025-%04d', $i));
-        }
-
-        $payload = SlackMessage::digest($vulns)->toPayload();
-        self::assertStringContainsString('and 5 more', $payload['attachments'][0]['blocks'][1]['text']['text']);
-    }
-
-    #[Test]
     public function toPayloadWithoutChannelOmitsChannelKey(): void
     {
         $payload = SlackMessage::forVulnerability($this->makeVuln())->toPayload();
@@ -315,7 +288,7 @@ final class SlackMessageTest extends TestCase
         ?float $epssPercentile = null,
         bool $inKev = false,
         bool $knownRansomware = false,
-        Priority $priority = Priority::P2,
+        Priority $priority = Priority::P1,
         bool $affectsInstalled = false,
         array $sources = ['test'],
         array $affectedPackages = [],

@@ -6,7 +6,7 @@ namespace Ase\Http;
 
 use Psr\Log\LoggerInterface;
 
-final class CurlClient
+class CurlClient
 {
     private const string USER_AGENT = 'A.S.E./1.0 (vulnerability-monitor)';
     private const int CONNECT_TIMEOUT = 10;

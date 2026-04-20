@@ -27,7 +27,7 @@ final class RunResultTest extends TestCase
     public function testFromClassificationExitCode1WhenP1Present(): void
     {
         $result = RunResult::fromClassification(
-            [$this->makeVuln(Priority::P1), $this->makeVuln(Priority::P2)],
+            [$this->makeVuln(Priority::P1)],
             [],
             null,
             false,
@@ -67,7 +67,7 @@ final class RunResultTest extends TestCase
     {
         // P0 appears only in escalations -> should still promote exit code to 2.
         $result = RunResult::fromClassification(
-            [$this->makeVuln(Priority::P2)],
+            [$this->makeVuln(Priority::P1)],
             [$this->makeVuln(Priority::P0)],
             null,
             false,
@@ -79,14 +79,10 @@ final class RunResultTest extends TestCase
     }
 
     #[Test]
-    public function testFromClassificationExitCodeIgnoresP2P3P4(): void
+    public function testFromClassificationExitCode0WithEmptyAlertSet(): void
     {
         $result = RunResult::fromClassification(
-            [
-                $this->makeVuln(Priority::P2),
-                $this->makeVuln(Priority::P3),
-                $this->makeVuln(Priority::P4),
-            ],
+            [],
             [],
             null,
             false,
@@ -110,7 +106,7 @@ final class RunResultTest extends TestCase
         self::assertNull($json['magento']);
         self::assertSame([], $json['findings']);
         self::assertSame(
-            ['P0' => 0, 'P1' => 0, 'P2' => 0, 'P3' => 0, 'P4' => 0],
+            ['P0' => 0, 'P1' => 0],
             $json['summary'],
         );
         self::assertSame(0, $json['exit_code']);
@@ -136,7 +132,7 @@ final class RunResultTest extends TestCase
     #[Test]
     public function testToJsonArraySerializesFindings(): void
     {
-        $newAlerts = [$this->makeVuln(Priority::P0), $this->makeVuln(Priority::P2)];
+        $newAlerts = [$this->makeVuln(Priority::P0), $this->makeVuln(Priority::P1)];
         $escalations = [$this->makeVuln(Priority::P1)];
 
         $result = RunResult::fromClassification($newAlerts, $escalations, null, false, self::FIXED_RUN_ID);
@@ -144,10 +140,7 @@ final class RunResultTest extends TestCase
 
         self::assertCount(3, $json['findings']);
         self::assertSame(1, $json['summary']['P0']);
-        self::assertSame(1, $json['summary']['P1']);
-        self::assertSame(1, $json['summary']['P2']);
-        self::assertSame(0, $json['summary']['P3']);
-        self::assertSame(0, $json['summary']['P4']);
+        self::assertSame(2, $json['summary']['P1']);
     }
 
     #[Test]

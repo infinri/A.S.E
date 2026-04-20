@@ -18,7 +18,9 @@ final class NvdFeedTest extends TestCase
             'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
         ]);
 
-        $feed = new NvdFeed($http, $config, new \Psr\Log\NullLogger());
+        $logger = new \Psr\Log\NullLogger();
+        $analyzer = new \Ase\Filter\ComposerLockAnalyzer($config, $logger);
+        $feed = new NvdFeed($http, $config, $logger, $analyzer);
 
         self::assertSame('nvd', $feed->getName());
     }

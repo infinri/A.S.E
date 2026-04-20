@@ -105,14 +105,12 @@ Deduplicator (alias-aware merge across all feeds)
 ComposerLockAnalyzer (optional: flags installed vulnerable versions)
   |
   v
-PriorityCalculator (CVSS + EPSS + KEV -> P0-P4)
+PriorityCalculator (CVSS + EPSS + KEV -> P0, P1, or filtered out)
   |
   v
 SlackNotifier (routes by priority, throttled)
-  |-- P0/P1 -> #security-critical (individual messages)
-  |-- P2    -> #security-alerts (batched digest)
-  |-- P3    -> logged only
-  |-- P4    -> tracked only
+  |-- P0 -> SLACK_WEBHOOK_URL (required, individual messages)
+  |-- P1 -> SLACK_WEBHOOK_P1  (optional; silently skipped when unset)
   |
   v
 StateManager.save() (atomic: temp file + rename)
@@ -144,11 +142,14 @@ src/
   State/               -- Atomic JSON state persistence
   Notify/              -- Slack routing + Block Kit message builder
   Filter/              -- ComposerLockAnalyzer (optional version matching)
-  Health/              -- Feed health tracking, schema validation, digest reporting
+  Health/              -- Feed health tracking, schema validation
+  Logging/             -- SecretRedactor, monolog processors (correlation id + secret scrubbing)
+  Run/                 -- RunResult DTO returned from Ase::run()
+  Support/             -- CorrelationId (UUIDv4 generator)
   Http/                -- CurlClient with retry/backoff, HttpResponse value object
 
 bin/
-  ase.php              -- CLI entry point (261 LOC)
+  ase                  -- CLI entry point (shebang PHP)
   heartbeat.sh         -- Dead man's switch checker
 
 tests/Unit/            -- 14 test files, ~2,000 LOC
@@ -160,20 +161,22 @@ tests/Unit/            -- 14 test files, ~2,000 LOC
 
 ### Priority Tiers
 
+ASE only tracks and notifies on P0 and P1. Anything that doesn't meet the P0/P1 thresholds is filtered out by `PriorityCalculator::classify()` (returns `null`) and never reaches the notification stage or the state file.
+
 | Tier | Label | Criteria | Slack Routing |
 |------|-------|----------|---------------|
-| **P0** | Immediate | In CISA KEV, OR (CVSS >= 9.0 AND EPSS >= 10%) | Individual message to #security-critical |
-| **P1** | Urgent | Known ransomware, OR (CVSS >= 7.0 AND EPSS >= 10%), OR (affects installed version AND CVSS >= 7.0) | Individual message to #security-critical |
-| **P2** | Soon | CVSS >= 7.0, OR EPSS >= 5% | Batched digest to #security-alerts |
-| **P3** | Monitor | CVSS >= 4.0 AND EPSS < 5% | Logged only |
-| **P4** | Track | Everything else | Tracked in state only |
+| **P0** | Immediate | In CISA KEV, OR (CVSS >= 9.0 AND EPSS >= 10%) | Individual message via `SLACK_WEBHOOK_URL` (required) |
+| **P1** | Urgent | Known ransomware, OR (CVSS >= 7.0 AND EPSS >= 10%), OR (affects installed version AND CVSS >= 7.0) | Individual message via `SLACK_WEBHOOK_P1` (optional; silently skipped with one-line warning when unset) |
+
+Legacy priority values (`P2`, `P3`, `P4`) left behind in pre-upgrade state files are silently pruned on load by `StateManager::load()` with a one-line info log counting the prune.
 
 ### Signal Weighting Logic
 
 - **KEV alone -> P0.** Active exploitation trumps all other signals.
-- **CVSS + EPSS both high -> P0/P1.** Severe AND likely to be exploited.
-- **CVSS alone -> P2-P3.** Severe on paper but no evidence of exploitation.
-- **EPSS alone -> P2.** Evidence of exploitation but unknown severity.
+- **CVSS critical + EPSS high -> P0.** Severe AND likely to be exploited.
+- **CVSS high + EPSS high -> P1.** Upper-range severity with exploitation likelihood.
+- **Affects installed version + CVSS high -> P1.** Because it's in your lockfile.
+- **Everything else -> filtered out.** Dropped before notification and state persistence.
 
 ### CVSS Fallback
 
@@ -190,10 +193,10 @@ All thresholds are configurable via `.env`:
 ```
 CVSS_CRITICAL_THRESHOLD=9.0
 CVSS_HIGH_THRESHOLD=7.0
-CVSS_MEDIUM_THRESHOLD=4.0
 EPSS_HIGH_THRESHOLD=0.10
-EPSS_MEDIUM_THRESHOLD=0.05
 ```
+
+`CVSS_MEDIUM_THRESHOLD` and `EPSS_MEDIUM_THRESHOLD` were removed along with the P2/P3/P4 tiers.
 
 ---
 
@@ -236,7 +239,7 @@ When two records represent the same vulnerability:
 
 ### Escalation Detection
 
-After dedup and re-scoring, if a vulnerability's priority improved (e.g., P2 -> P0 because KEV added it), a separate "ESCALATED" message is sent to #security-critical.
+After dedup and re-scoring, if a vulnerability's priority improved (e.g., P1 -> P0 because KEV added it), a separate "ESCALATED" message is sent to the appropriate webhook. A vulnerability that previously fell below P0/P1 thresholds (and was therefore never stored) and now meets them is treated as a new finding, not an escalation -- the system never tracked it before.
 
 ---
 
@@ -246,7 +249,8 @@ After dedup and re-scoring, if a vulnerability's priority improved (e.g., P2 -> 
 
 | Secret | Storage | Usage | Required? |
 |--------|---------|-------|-----------|
-| `SLACK_WEBHOOK_URL` | `.env` (gitignored) | POST body to Slack | Yes |
+| `SLACK_WEBHOOK_URL` | `.env` (gitignored) | POST body to Slack for P0 alerts | Yes |
+| `SLACK_WEBHOOK_P1` | `.env` (gitignored) | POST body to Slack for P1 alerts | No (P1 silently skipped when unset) |
 | `NVD_API_KEY` | `.env` (gitignored) | `apiKey` HTTP header | No (10x rate limit improvement) |
 | `GITHUB_TOKEN` | `.env` (gitignored) | `Authorization: token` header | No (83x rate limit improvement) |
 
@@ -255,7 +259,7 @@ After dedup and re-scoring, if a vulnerability's priority improved (e.g., P2 -> 
 - All secrets loaded via `vlucas/phpdotenv` from `.env`
 - `.env` excluded from git via `.gitignore`
 - API keys sent via HTTP headers, never in query strings (avoids URL logging)
-- No secrets appear in log output
+- `SecretRedactor` + monolog processor mask webhook URLs, GitHub tokens, NVD key, Bearer tokens, and URL basic auth in all log output. The live values of `SLACK_WEBHOOK_URL`, `SLACK_WEBHOOK_P1`, `NVD_API_KEY`, and `GITHUB_TOKEN` are registered at bootstrap for exact-match scrubbing.
 
 **Areas to monitor:**
 - Secrets live in process memory during execution (unavoidable in PHP)
@@ -394,12 +398,13 @@ Every Sunday, a summary is posted to #security-alerts:
 
 ### Routing
 
-| Priority | Channel | Format |
+| Priority | Webhook | Format |
 |----------|---------|--------|
-| P0, P1 | #security-critical | Individual message per vulnerability |
-| P2 | #security-alerts | Batched digest (up to 20 per message) |
-| Escalation | #security-critical | Individual, marked "ESCALATED" |
-| Weekly digest | #security-alerts | Summary statistics |
+| P0 | `SLACK_WEBHOOK_URL` | Individual message per vulnerability |
+| P1 | `SLACK_WEBHOOK_P1` (optional) | Individual message per vulnerability; silently skipped when unset |
+| Escalation | Same webhook as the current priority | Individual, marked "ESCALATED" |
+
+Slack incoming webhooks are channel-scoped, so two webhooks means two channels. `SLACK_CHANNEL_CRITICAL` and `SLACK_CHANNEL_ALERTS` env vars were removed -- the channel is implicit in each webhook.
 
 ### Message Structure (P0/P1)
 
@@ -420,7 +425,6 @@ Messages use Slack Block Kit and are designed for both leadership and engineers:
 |----------|-------|
 | P0 | #FF0000 (red) |
 | P1 | #FF6600 (orange) |
-| P2 | #FFCC00 (yellow) |
 
 ### Throttling
 
@@ -503,18 +507,15 @@ COMPOSER_LOCK_PATH=/path/to/composer.lock
 # Feed selection (default: all)
 ENABLED_FEEDS=kev,nvd,ghsa,osv,packagist
 
-# Ecosystem filtering (GitHub/OSV)
-ECOSYSTEMS=composer,npm
+# Ecosystem filtering -- all three are AUTO-DETECTED from composer.lock.
+# Env values are ADDITIVE for the list fields and OVERRIDE for the scalar.
+# Leave empty unless you need to extend or replace the auto-detected defaults.
+ECOSYSTEMS=
+VENDOR_FILTER=
+NVD_CPE_PREFIX=
 
-# KEV vendor filter
-VENDOR_FILTER=adobe,magento
-
-# NVD CPE prefix filter
-NVD_CPE_PREFIX=cpe:2.3:a:adobe:*
-
-# Slack channels
-SLACK_CHANNEL_CRITICAL=#security-critical
-SLACK_CHANNEL_ALERTS=#security-alerts
+# Slack -- P1 webhook is optional
+SLACK_WEBHOOK_P1=
 
 # File paths
 STATE_FILE=/var/lib/ase/state.json
@@ -531,9 +532,7 @@ POLL_INTERVAL_PACKAGIST=3600
 # Scoring thresholds
 CVSS_CRITICAL_THRESHOLD=9.0
 CVSS_HIGH_THRESHOLD=7.0
-CVSS_MEDIUM_THRESHOLD=4.0
 EPSS_HIGH_THRESHOLD=0.10
-EPSS_MEDIUM_THRESHOLD=0.05
 ```
 
 ---
@@ -612,7 +611,7 @@ jq '.feed_health' /var/lib/ase/state.json  # Per-feed health
 |------|-----------|--------|-----------|--------|
 | State file grows unbounded | Low | Low | 365-day pruning | Mitigated |
 | Run exceeds 30m window | Very Low | Low | flock prevents overlap | Mitigated |
-| Slack message flood | Low | Medium | 1.5s throttle, batched digests for P2 | Mitigated |
+| Slack message flood | Low | Medium | 1.5s throttle; only P0 and P1 alert (P2+ filtered out before notification); first run is silent | Mitigated |
 
 ---
 

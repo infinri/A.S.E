@@ -167,4 +167,94 @@ final class StateManagerTest extends TestCase
         self::assertNotNull($loaded['last_run']);
         self::assertSame(2, $loaded['stats']['total_tracked']);
     }
+
+    #[Test]
+    public function testLoadPrunesLegacyP2PriorityEntries(): void
+    {
+        $path = $this->tmpDir . '/state-with-legacy.json';
+        file_put_contents($path, json_encode([
+            'vulnerabilities' => [
+                'CVE-A' => ['canonical_id' => 'CVE-A', 'priority' => 'P0'],
+                'CVE-B' => ['canonical_id' => 'CVE-B', 'priority' => 'P1'],
+                'CVE-C' => ['canonical_id' => 'CVE-C', 'priority' => 'P2'],
+                'CVE-D' => ['canonical_id' => 'CVE-D', 'priority' => 'P3'],
+                'CVE-E' => ['canonical_id' => 'CVE-E', 'priority' => 'P4'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $mgr = new StateManager($path, new NullLogger());
+        $state = $mgr->load();
+
+        self::assertArrayHasKey('CVE-A', $state['vulnerabilities']);
+        self::assertArrayHasKey('CVE-B', $state['vulnerabilities']);
+        self::assertArrayNotHasKey('CVE-C', $state['vulnerabilities']);
+        self::assertArrayNotHasKey('CVE-D', $state['vulnerabilities']);
+        self::assertArrayNotHasKey('CVE-E', $state['vulnerabilities']);
+    }
+
+    #[Test]
+    public function testLoadLogsPruneCountWhenAboveZero(): void
+    {
+        $path = $this->tmpDir . '/state-legacy.json';
+        file_put_contents($path, json_encode([
+            'vulnerabilities' => [
+                'CVE-A' => ['canonical_id' => 'CVE-A', 'priority' => 'P2'],
+                'CVE-B' => ['canonical_id' => 'CVE-B', 'priority' => 'P3'],
+                'CVE-C' => ['canonical_id' => 'CVE-C', 'priority' => 'P4'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $logger = new \Ase\Tests\Unit\State\TestCollectingLogger();
+        $mgr = new StateManager($path, $logger);
+        $mgr->load();
+
+        $match = $logger->firstRecordMatching('Pruned legacy priority entries');
+        self::assertNotNull($match);
+        self::assertSame(3, $match['context']['count']);
+    }
+
+    #[Test]
+    public function testLoadLogsNothingWhenNoLegacyEntries(): void
+    {
+        $path = $this->tmpDir . '/state-clean.json';
+        file_put_contents($path, json_encode([
+            'vulnerabilities' => [
+                'CVE-A' => ['canonical_id' => 'CVE-A', 'priority' => 'P0'],
+                'CVE-B' => ['canonical_id' => 'CVE-B', 'priority' => 'P1'],
+            ],
+        ], JSON_THROW_ON_ERROR));
+
+        $logger = new \Ase\Tests\Unit\State\TestCollectingLogger();
+        $mgr = new StateManager($path, $logger);
+        $mgr->load();
+
+        self::assertNull($logger->firstRecordMatching('Pruned legacy priority entries'));
+    }
+}
+
+final class TestCollectingLogger extends \Psr\Log\AbstractLogger
+{
+    /** @var array<int, array{level: mixed, message: string, context: array<string, mixed>}> */
+    public array $records = [];
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    public function log(mixed $level, string|\Stringable $message, array $context = []): void
+    {
+        $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
+    }
+
+    /**
+     * @return array{level: mixed, message: string, context: array<string, mixed>}|null
+     */
+    public function firstRecordMatching(string $needle): ?array
+    {
+        foreach ($this->records as $r) {
+            if (str_contains($r['message'], $needle)) {
+                return $r;
+            }
+        }
+        return null;
+    }
 }

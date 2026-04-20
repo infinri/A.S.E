@@ -88,36 +88,6 @@ final class SlackMessage
         return $msg;
     }
 
-    /** @param Vulnerability[] $vulns */
-    public static function digest(array $vulns): self
-    {
-        $msg = new self();
-        $msg->color = Priority::P2->slackColor();
-
-        $msg->blocks[] = [
-            'type' => 'header',
-            'text' => ['type' => 'plain_text', 'text' => sprintf('Security Digest: %d vulnerabilities need attention', count($vulns))],
-        ];
-
-        $lines = [];
-        foreach (array_slice($vulns, 0, 20) as $v) {
-            $cvss = $v->cvssScore !== null ? sprintf('%.1f', $v->cvssScore) : '?';
-            $pkg = $v->affectedPackages !== [] ? $v->affectedPackages[0]->name : 'unknown';
-            $lines[] = "`{$v->canonicalId}` | Severity {$cvss}/10 | {$pkg}";
-        }
-
-        if (count($vulns) > 20) {
-            $lines[] = sprintf('_...and %d more_', count($vulns) - 20);
-        }
-
-        $msg->blocks[] = [
-            'type' => 'section',
-            'text' => ['type' => 'mrkdwn', 'text' => implode("\n", $lines)],
-        ];
-
-        return $msg;
-    }
-
     /** @return array<string, mixed> */
     public function toPayload(?string $channel = null): array
     {
@@ -160,9 +130,6 @@ final class SlackMessage
         $urgency = match ($vuln->priority) {
             Priority::P0 => 'CRITICAL',
             Priority::P1 => 'URGENT',
-            Priority::P2 => 'Action Needed',
-            Priority::P3 => 'Monitor',
-            Priority::P4 => 'Low Risk',
         };
 
         return "{$urgency}: {$vuln->canonicalId}";

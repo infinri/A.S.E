@@ -8,7 +8,6 @@ use Ase\Dedup\Deduplicator;
 use Ase\Feed\EpssFeed;
 use Ase\Feed\FeedInterface;
 use Ase\Filter\ComposerLockAnalyzer;
-use Ase\Health\DigestReporter;
 use Ase\Health\FeedHealthTracker;
 use Ase\Logging\CorrelationIdProcessor;
 use Ase\Model\Priority;
@@ -34,7 +33,6 @@ final class Ase
         private readonly ComposerLockAnalyzer $composerLockAnalyzer,
         private readonly SlackNotifier $slackNotifier,
         private readonly FeedHealthTracker $healthTracker,
-        private readonly DigestReporter $digestReporter,
         private readonly LoggerInterface $logger,
         private readonly CorrelationIdProcessor $correlationIdProcessor,
     ) {}
@@ -259,14 +257,6 @@ final class Ase
                 'dry_run' => true,
             ]);
             return;
-        }
-
-        // Weekly digest
-        $lastDigest = $state['stats']['last_digest'] ?? null;
-        if (!$isFirstRun && $this->digestReporter->shouldPostDigest($lastDigest)) {
-            if ($this->digestReporter->postDigest($state)) {
-                $state['stats']['last_digest'] = date('c');
-            }
         }
 
         // Prune old records

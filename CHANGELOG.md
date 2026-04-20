@@ -9,9 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `SecretRedactor` + monolog processor that masks Slack webhook URLs, GitHub tokens (ghp_/gho_/ghu_/ghs_/ghr_/github_pat_), Bearer tokens, URL basic-auth credentials, and registered exact-match secrets (NVD API key, Slack webhook, GitHub token) in all log output.
+- `CorrelationId::generate()` produces a UUIDv4 for every run; a mutable `CorrelationIdProcessor` injects `run_id` into every log record and populates `RunResult->runId`.
+- `SLACK_WEBHOOK_P1` env var for a second, channel-scoped webhook. When set, P1 alerts route here; when unset, P1 alerts are silently skipped after one warning per run.
+- Auto-detection of ecosystem filters from `composer.lock`: `ComposerLockAnalyzer::detectVendors()`, `detectEcosystems()`, `detectCpePrefix()`. Env values are additive for `ECOSYSTEMS`/`VENDOR_FILTER` and override-when-set for `NVD_CPE_PREFIX`.
+- Slack alerts for composer-ecosystem findings now include a Packagist remediation button linking to `https://packagist.org/packages/{vendor}/{name}`.
+- `tests/Unit/Logging/*`, `tests/Unit/Support/CorrelationIdTest`, `tests/Unit/Notify/SlackNotifierTest` covering redaction, correlation-id wiring, and P0/P1 webhook routing.
+- `StateManager::load()` silently prunes legacy state entries with priorities outside `{P0, P1}` and logs a one-line count when pruning occurs.
+
 ### Changed
 
+- **Priority enum reduced to `[P0, P1]`.** P2, P3, P4 no longer exist; `PriorityCalculator::classify()` returns `?Priority` (null = not alertable) and `classifyAll()` filters non-alertable vulns out before they reach notification or persistence.
+- stderr handler now uses monolog's `JsonFormatter` (one JSON object per line). The rotating file handler keeps the human-readable `LineFormatter` for local debugging.
+- `Ase` constructor takes a `CorrelationIdProcessor` dependency (used to thread per-run ids into log context) and no longer takes `DigestReporter`.
+- `RunResult::fromClassification()` takes `runId` as its final parameter; `toJsonArray()`'s `summary` field now has only `P0` and `P1` keys (previously P0..P4).
+- Feeds (`KevFeed`, `NvdFeed`, `GitHubAdvisoryFeed`, `OsvFeed`) now accept `ComposerLockAnalyzer` and merge env-configured ecosystem/vendor/CPE filters with auto-detected values from `composer.lock`.
+- `--test-alert` sends a P0 sample always and a P1 sample only when `SLACK_WEBHOOK_P1` is set; no longer sends a P2 sample.
+- `Config::slackWebhookUrl()` previously returned an empty string when unset; now returns `?string` and `SlackNotifier`/`DigestReporter` no-op with a warning when null. (Carryover from v1.0.0 that was still partially documented in older prose.)
+
+### Removed
+
+- `src/Health/DigestReporter.php` and the weekly P2 digest Slack path.
+- `SlackMessage::digest()` method.
+- `SLACK_CHANNEL_CRITICAL` and `SLACK_CHANNEL_ALERTS` env vars. Channels are now implicit in each webhook.
+- `EPSS_MEDIUM_THRESHOLD` and `CVSS_MEDIUM_THRESHOLD` env vars (they only drove P2/P3/P4 classification).
+- `Config::slackChannelCritical()`, `Config::slackChannelAlerts()`, `Config::epssMediumThreshold()`, `Config::cvssMediumThreshold()` methods.
+
 ### Fixed
+
+- Dead code branch in `RunResult::fromClassification` after the priority enum reduction (flagged by phpstan; rule `identical.alwaysTrue`).
 
 ## [1.0.0] - 2026-04-19
 

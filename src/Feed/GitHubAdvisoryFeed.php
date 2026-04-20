@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ase\Feed;
 
 use Ase\Config;
+use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Http\CurlClient;
 use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
@@ -27,6 +28,7 @@ final readonly class GitHubAdvisoryFeed implements FeedInterface
         private CurlClient $http,
         private Config $config,
         private LoggerInterface $logger,
+        private ComposerLockAnalyzer $composerLockAnalyzer,
     ) {}
 
     #[\Override]
@@ -39,8 +41,12 @@ final readonly class GitHubAdvisoryFeed implements FeedInterface
     public function poll(string $lastPollTimestamp): VulnerabilityBatch
     {
         $allVulnerabilities = [];
+        $ecosystems = array_unique(array_merge(
+            $this->config->ecosystems(),
+            $this->composerLockAnalyzer->detectEcosystems(),
+        ));
 
-        foreach ($this->config->ecosystems() as $ecosystem) {
+        foreach ($ecosystems as $ecosystem) {
             $vulns = $this->pollEcosystem($ecosystem, $lastPollTimestamp);
             array_push($allVulnerabilities, ...$vulns);
         }
@@ -179,7 +185,7 @@ final readonly class GitHubAdvisoryFeed implements FeedInterface
             kevDueDate: null,
             kevRequiredAction: null,
             affectsInstalledVersion: false,
-            priority: Priority::P4,
+            priority: Priority::P1,
             notifiedAtPriority: null,
         );
     }

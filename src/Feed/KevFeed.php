@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Ase\Feed;
 
 use Ase\Config;
+use Ase\Filter\ComposerLockAnalyzer;
 use Ase\Http\CurlClient;
 use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
@@ -20,6 +21,7 @@ final readonly class KevFeed implements FeedInterface
         private CurlClient $http,
         private Config $config,
         private LoggerInterface $logger,
+        private ComposerLockAnalyzer $composerLockAnalyzer,
     ) {}
 
     #[\Override]
@@ -47,7 +49,10 @@ final readonly class KevFeed implements FeedInterface
         }
 
         $now = date('c');
-        $vendorFilter = array_map('strtolower', $this->config->vendorFilter());
+        $vendorFilter = array_values(array_unique(array_map(
+            'strtolower',
+            array_merge($this->config->vendorFilter(), $this->composerLockAnalyzer->detectVendors()),
+        )));
         $vulnerabilities = [];
 
         foreach ($data['vulnerabilities'] as $entry) {
@@ -87,7 +92,7 @@ final readonly class KevFeed implements FeedInterface
                 kevDueDate: $entry['dueDate'] ?? null,
                 kevRequiredAction: $entry['requiredAction'] ?? null,
                 affectsInstalledVersion: false,
-                priority: Priority::P4,
+                priority: Priority::P0,
                 notifiedAtPriority: null,
             );
         }

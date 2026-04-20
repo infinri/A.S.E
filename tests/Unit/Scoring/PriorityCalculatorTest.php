@@ -21,141 +21,99 @@ final class PriorityCalculatorTest extends TestCase
     }
 
     #[Test]
-    public function kevAlwaysClassifiesAsP0(): void
+    public function inKevIsP0(): void
     {
-        $vuln = $this->makeVuln(inKev: true, cvssScore: 2.0, epssScore: 0.001);
-
+        $vuln = $this->makeVuln(cvssScore: 5.0, epssScore: 0.01, inKev: true);
         self::assertSame(Priority::P0, $this->calculator->classify($vuln));
     }
 
     #[Test]
     public function criticalCvssWithHighEpssIsP0(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 9.8, epssScore: 0.15);
-
+        $vuln = $this->makeVuln(cvssScore: 9.5, epssScore: 0.25);
         self::assertSame(Priority::P0, $this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function criticalCvssWithoutEpssIsNotP0(): void
+    public function knownRansomwareIsP1(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 9.8, epssScore: null);
-
-        // Falls through to P2 (CVSS >= 7.0)
-        self::assertSame(Priority::P2, $this->calculator->classify($vuln));
-    }
-
-    #[Test]
-    public function ransomwareClassifiesAsP1(): void
-    {
-        $vuln = $this->makeVuln(knownRansomware: true, cvssScore: 3.0);
-
+        $vuln = $this->makeVuln(cvssScore: 5.0, epssScore: 0.01, knownRansomware: true);
         self::assertSame(Priority::P1, $this->calculator->classify($vuln));
     }
 
     #[Test]
     public function highCvssWithHighEpssIsP1(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 7.5, epssScore: 0.12);
-
+        $vuln = $this->makeVuln(cvssScore: 7.5, epssScore: 0.15);
         self::assertSame(Priority::P1, $this->calculator->classify($vuln));
     }
 
     #[Test]
     public function affectsInstalledWithHighCvssIsP1(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 8.0, affectsInstalled: true);
-
+        $vuln = $this->makeVuln(cvssScore: 7.5, epssScore: 0.01, affectsInstalled: true);
         self::assertSame(Priority::P1, $this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function highCvssAloneIsP2(): void
+    public function highCvssAloneReturnsNull(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 7.5, epssScore: 0.02);
-
-        self::assertSame(Priority::P2, $this->calculator->classify($vuln));
+        $vuln = $this->makeVuln(cvssScore: 7.5, epssScore: 0.01);
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function mediumEpssAloneIsP2(): void
+    public function mediumScoresReturnNull(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 3.0, epssScore: 0.06);
-
-        self::assertSame(Priority::P2, $this->calculator->classify($vuln));
+        $vuln = $this->makeVuln(cvssScore: 5.0, epssScore: 0.06);
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function mediumCvssWithLowEpssIsP3(): void
+    public function lowScoresWithoutKevReturnNull(): void
     {
-        $vuln = $this->makeVuln(cvssScore: 5.0, epssScore: 0.01);
-
-        self::assertSame(Priority::P3, $this->calculator->classify($vuln));
+        $vuln = $this->makeVuln(cvssScore: 3.0, epssScore: 0.001);
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function lowCvssLowEpssIsP4(): void
-    {
-        $vuln = $this->makeVuln(cvssScore: 2.0, epssScore: 0.001);
-
-        self::assertSame(Priority::P4, $this->calculator->classify($vuln));
-    }
-
-    #[Test]
-    public function nullScoresDefaultToP4(): void
+    public function nullScoresReturnNull(): void
     {
         $vuln = $this->makeVuln(cvssScore: null, epssScore: null);
-
-        self::assertSame(Priority::P4, $this->calculator->classify($vuln));
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function fallbackCvssFromCvss3VectorNetworkLow(): void
+    public function fallbackCvssFromCvss3VectorNetworkLowUsedForP0(): void
     {
-        // No cvssScore, but has a vector -- should estimate 9.0 for AV:N/AC:L
         $vuln = $this->makeVuln(
             cvssScore: null,
+            epssScore: 0.25,
             cvssVector: 'CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
         );
-
-        // Estimated 9.0, no EPSS -> P2 (CVSS >= 7.0)
-        self::assertSame(Priority::P2, $this->calculator->classify($vuln));
+        self::assertSame(Priority::P0, $this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function fallbackCvssFromCvss3VectorNetworkOnly(): void
+    public function fallbackCvssFromCvss3VectorNetworkOnlyUsedForP1(): void
     {
-        // AV:N without AC:L estimates 7.5
         $vuln = $this->makeVuln(
             cvssScore: null,
+            epssScore: 0.25,
             cvssVector: 'CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:H/I:H/A:H',
         );
-
-        self::assertSame(Priority::P2, $this->calculator->classify($vuln));
+        self::assertSame(Priority::P1, $this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function fallbackCvssFromCvss3VectorAdjacent(): void
+    public function fallbackCvssFromCvss3VectorLocalReturnsNull(): void
     {
         $vuln = $this->makeVuln(
             cvssScore: null,
-            cvssVector: 'CVSS:3.1/AV:A/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
-        );
-
-        // Estimated 5.5 -> P3 (>= 4.0)
-        self::assertSame(Priority::P3, $this->calculator->classify($vuln));
-    }
-
-    #[Test]
-    public function fallbackCvssFromCvss3VectorLocal(): void
-    {
-        $vuln = $this->makeVuln(
-            cvssScore: null,
+            epssScore: 0.25,
             cvssVector: 'CVSS:3.1/AV:L/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H',
         );
-
-        // Estimated 4.0 -> P3
-        self::assertSame(Priority::P3, $this->calculator->classify($vuln));
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
@@ -163,24 +121,29 @@ final class PriorityCalculatorTest extends TestCase
     {
         $vuln = $this->makeVuln(
             cvssScore: null,
-            cvssVector: 'CVSS:4.0/AV:N/AC:L',
+            epssScore: 0.25,
+            cvssVector: 'AV:N/AC:L',
         );
-
-        self::assertSame(Priority::P4, $this->calculator->classify($vuln));
+        self::assertNull($this->calculator->classify($vuln));
     }
 
     #[Test]
-    public function classifyAllAppliesPriorityToEachVuln(): void
+    public function classifyAllFiltersOutNonAlertable(): void
     {
         $vulns = [
-            'CVE-1' => $this->makeVuln(cvssScore: 9.8, epssScore: 0.15, id: 'CVE-1'),
+            'CVE-1' => $this->makeVuln(cvssScore: 9.5, epssScore: 0.25, id: 'CVE-1'),
             'CVE-2' => $this->makeVuln(cvssScore: 2.0, epssScore: 0.001, id: 'CVE-2'),
+            'CVE-3' => $this->makeVuln(cvssScore: 7.5, epssScore: 0.15, id: 'CVE-3'),
         ];
 
         $result = $this->calculator->classifyAll($vulns);
 
+        self::assertCount(2, $result);
+        self::assertArrayHasKey('CVE-1', $result);
+        self::assertArrayHasKey('CVE-3', $result);
+        self::assertArrayNotHasKey('CVE-2', $result);
         self::assertSame(Priority::P0, $result['CVE-1']->priority);
-        self::assertSame(Priority::P4, $result['CVE-2']->priority);
+        self::assertSame(Priority::P1, $result['CVE-3']->priority);
     }
 
     private function makeVuln(
@@ -212,7 +175,7 @@ final class PriorityCalculatorTest extends TestCase
             kevDueDate: null,
             kevRequiredAction: null,
             affectsInstalledVersion: $affectsInstalled,
-            priority: Priority::P4,
+            priority: Priority::P1,
             notifiedAtPriority: null,
         );
     }

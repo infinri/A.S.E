@@ -41,9 +41,7 @@ final readonly class RunResult
                 $exitCode = 2;
                 break;
             }
-            if ($vuln->priority === Priority::P1) {
-                $exitCode = 1;
-            }
+            $exitCode = 1;
         }
 
         return new self(
@@ -62,9 +60,6 @@ final readonly class RunResult
         $summary = [
             'P0' => 0,
             'P1' => 0,
-            'P2' => 0,
-            'P3' => 0,
-            'P4' => 0,
         ];
 
         $findings = [];
