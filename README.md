@@ -1,6 +1,12 @@
 # ASE -- Automated Security Evaluator
 
+[![Packagist Version](https://img.shields.io/packagist/v/infinri/ase.svg)](https://packagist.org/packages/infinri/ase)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 CVE monitoring for Magento / Adobe Commerce / Mage-OS stores. One command, one Slack channel, one exit code for CI.
+
+<!-- DEMO: asciinema recording TBD. A 15-second terminal capture of `ase --dry-run --format=json`
+     catching a KEV-listed CVE belongs right here, before "What it catches". -->
 
 ---
 
@@ -13,7 +19,9 @@ Most teams land in one of two failure modes:
 - **Alert fatigue.** A generic CVE feed pipes every CVSS >= 7 into Slack. After day three, the channel is muted. After week one, a real P0 gets missed.
 - **Blind spots.** The team subscribes to a single source (usually Adobe's security bulletin) and misses KEV additions, Packagist advisories for third-party modules, and EPSS spikes on old CVEs.
 
-ASE closes both gaps. It polls all five feeds, deduplicates across them, filters against your `composer.lock` so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal. First run imports the current state silently so you don't get a 40-alert Monday morning. Subsequent runs alert on new findings and priority escalations.
+ASE closes both gaps. It polls all five feeds, deduplicates across them, filters against your `composer.lock` so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal.
+
+**No flood on day one.** The first run imports the current state silently -- every existing vulnerability is marked as already-notified at its current priority, and nothing is posted to Slack. Subsequent runs only alert on genuinely new findings or priority escalations (e.g., a known CVE gets added to CISA KEV). Because only P0/P1 emits, and messages are throttled 1.5s apart, even a large backfill produces a bounded stream of alerts rather than a channel-drowning flood.
 
 It is a CLI. It runs under cron. It exits `0`, `1`, or `2` based on what it found, so you can gate a CI pipeline on it. That's the whole surface.
 
@@ -41,9 +49,14 @@ export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
 # Walk into your Magento project and scan without sending alerts
 cd /path/to/your/magento/project
 ase --dry-run --format=json
+
+# Optional: verify your webhook wiring before scheduling under cron
+ase --test-alert
 ```
 
-`--dry-run` doesn't touch Slack or persist state. `--format=json` emits a machine-readable report to stdout while logs stay on stderr. Together they're the safe way to evaluate ASE before wiring it into a real channel.
+`--dry-run` doesn't touch Slack or persist state. `--format=json` emits a machine-readable report to stdout; operational logs stream to **stderr in JSON format (one object per line)**, so `--format=json` output on stdout is always clean for piping into `jq`, CI artifacts, or a log shipper. Together they're the safe way to evaluate ASE before wiring it into a real channel.
+
+`--test-alert` posts a sample P0 (and a P1 if `SLACK_WEBHOOK_P1` is set) to the configured webhooks so you can verify the Slack side is connected without waiting for a real CVE to drop.
 
 When you're ready for notifications, drop `--dry-run` and schedule under cron (example below).
 
@@ -182,16 +195,30 @@ ENABLED_FEEDS=kev,nvd,ghsa
 # osv and packagist now skipped
 ```
 
+## State and troubleshooting
+
+ASE persists notification state to `STATE_FILE` (default `var/state/state.json`, or `/var/lib/ase/state.json` in the advanced-deployment layout below). The state file is what keeps you from getting re-alerted on the same CVE every run; it records which vulnerabilities have been notified and at what priority.
+
+**Reset state (force a silent re-import):**
+
+```bash
+rm /var/lib/ase/state.json
+# Next run will be treated as first-run: silent import, no Slack pings.
+```
+
+Do this if you misconfigured webhooks and got a partial flood, swapped feeds, or want a clean baseline against a newly-updated `composer.lock`. The state file contains no secrets -- only CVE IDs, priorities, and timestamps.
+
 ## Self-monitoring
 
 - **Heartbeat:** `bin/heartbeat.sh` alerts via syslog if the last successful run was >24h ago.
 - **Feed health:** consecutive failures per feed are tracked; 3+ failures logs ERROR.
 - **Schema drift:** warnings on missing expected fields in API responses.
+- **Structured logs on stderr:** every log record is a JSON object carrying a per-run `run_id` (UUIDv4) so you can correlate across Datadog/Loki/CloudWatch. Credentials (Slack webhooks, GitHub tokens, NVD keys, Bearer headers, URL basic-auth) are masked by an in-process redactor before the handler writes.
 
 ## Requirements
 
-- PHP 8.4+ with `curl`, `json`, `mbstring`, `fileinfo`
-- Composer 2.x
+- PHP 8.4+ with `curl`, `json`, `mbstring` at runtime
+- Composer 2.x for installation (`fileinfo` is needed during install, not at runtime)
 - `flock` (util-linux) if running under cron
 
 Optional: `pdo_sqlite` for a future state migration.
@@ -210,6 +237,10 @@ composer stan           # phpstan level 8
 ## Architecture
 
 Deep dive: [`HANDBOOK.md`](HANDBOOK.md) covers module layout, scoring internals, feed contracts, state file schema, and operational playbook.
+
+## Releases
+
+See [`CHANGELOG.md`](CHANGELOG.md) for release history and upgrade notes. v1.x is in active development.
 
 ## License
 
