@@ -6,7 +6,7 @@ namespace Ase\Logging;
 
 final class SecretRedactor
 {
-    private const MIN_EXACT_LENGTH = 8;
+    private const int MIN_EXACT_LENGTH = 8;
 
     /** @var array<int, array{pattern: string, replacement: string}> */
     private array $patterns;

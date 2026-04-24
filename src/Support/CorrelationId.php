@@ -4,8 +4,13 @@ declare(strict_types=1);
 
 namespace Ase\Support;
 
+use Random\RandomException;
+
 final class CorrelationId
 {
+    /**
+     * @throws RandomException
+     */
     public static function generate(): string
     {
         $bytes = random_bytes(16);

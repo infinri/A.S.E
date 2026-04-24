@@ -10,6 +10,7 @@ use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
+use JsonException;
 use Psr\Log\LoggerInterface;
 
 final readonly class PackagistAdvisoryFeed implements FeedInterface
@@ -33,7 +34,10 @@ final readonly class PackagistAdvisoryFeed implements FeedInterface
     {
         return 'packagist';
     }
-
+    
+    /**
+     * @throws JsonException
+     */
     #[\Override]
     public function poll(string $lastPollTimestamp): VulnerabilityBatch
     {

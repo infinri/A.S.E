@@ -6,6 +6,7 @@ namespace Ase\Feed;
 
 use Ase\Http\CurlClient;
 use Ase\Model\Vulnerability;
+use JsonException;
 use Psr\Log\LoggerInterface;
 
 class EpssFeed
@@ -17,10 +18,11 @@ class EpssFeed
         private readonly CurlClient $http,
         private readonly LoggerInterface $logger,
     ) {}
-
+    
     /**
      * @param string[] $cveIds
      * @return array<string, array{score: float, percentile: float}>
+     * @throws JsonException
      */
     public function enrichBatch(array $cveIds): array
     {
@@ -59,10 +61,11 @@ class EpssFeed
 
         return $results;
     }
-
+    
     /**
      * @param Vulnerability[] $vulnerabilities
      * @return Vulnerability[]
+     * @throws JsonException
      */
     public function enrichVulnerabilities(array $vulnerabilities): array
     {

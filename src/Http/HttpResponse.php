@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Ase\Http;
 
+use JsonException;
+
 final readonly class HttpResponse
 {
     /** @param array<string, string> $headers */
@@ -12,17 +14,18 @@ final readonly class HttpResponse
         public string $body,
         public array $headers = [],
     ) {}
-
+    
     /**
      * @param positive-int $depth
      * @return array<string, mixed>
+     * @throws JsonException
      */
     public function json(int $depth = 64): array
     {
         $decoded = json_decode($this->body, true, $depth, JSON_THROW_ON_ERROR);
 
         if (!is_array($decoded)) {
-            throw new \JsonException('Expected JSON array or object, got ' . gettype($decoded));
+            throw new JsonException('Expected JSON array or object, got ' . gettype($decoded));
         }
 
         return $decoded;

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Ase\State;
 
+use JsonException;
 use Psr\Log\LoggerInterface;
 
 final class StateManager
@@ -108,8 +109,10 @@ final class StateManager
 
         return $state;
     }
-
-    /** @param array<string, mixed> $state */
+    
+    /** @param array<string, mixed> $state
+     * @throws JsonException
+     */
     public function save(array $state): void
     {
         $state['last_run'] = date('c');
