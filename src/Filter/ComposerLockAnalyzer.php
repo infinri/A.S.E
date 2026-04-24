@@ -88,6 +88,12 @@ final class ComposerLockAnalyzer
         };
     }
 
+    /** @return array<string, string> package name => version */
+    public function getInstalledPackages(): array
+    {
+        return $this->loadInstalled();
+    }
+
     /** @return array<string, string> */
     private function loadInstalled(): array
     {

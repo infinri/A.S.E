@@ -121,7 +121,7 @@ $feeds = [
     new KevFeed($http, $config, $logger, $composerLockAnalyzer),
     new NvdFeed($http, $config, $logger, $composerLockAnalyzer),
     new GitHubAdvisoryFeed($http, $config, $logger, $composerLockAnalyzer),
-    new OsvFeed($http, $config, $logger, $composerLockAnalyzer),
+    new OsvFeed($http, $logger, $composerLockAnalyzer),
     new PackagistAdvisoryFeed($http, $config, $logger),
 ];
 
@@ -221,16 +221,26 @@ if ($testAlert) {
         }
     }
 
+    // Prefer Primary-type metric; fall back to first entry when no Primary exists
+    // (some CVEs publish only Secondary metrics, e.g. CVE-2024-34102 via psirt@adobe.com).
     $testCvssScore = null;
     $testCvssVector = null;
     foreach (['cvssMetricV31', 'cvssMetricV30', 'cvssMetricV40'] as $metricKey) {
-        foreach ($cve['metrics'][$metricKey] ?? [] as $metric) {
+        $entries = $cve['metrics'][$metricKey] ?? [];
+        if ($entries === []) {
+            continue;
+        }
+        foreach ($entries as $metric) {
             if (($metric['type'] ?? '') === 'Primary') {
                 $testCvssScore = (float) $metric['cvssData']['baseScore'];
                 $testCvssVector = (string) $metric['cvssData']['vectorString'];
                 break 2;
             }
         }
+        $first = $entries[0];
+        $testCvssScore = (float) ($first['cvssData']['baseScore'] ?? 0.0);
+        $testCvssVector = (string) ($first['cvssData']['vectorString'] ?? '');
+        break;
     }
 
     $testCwes = [];

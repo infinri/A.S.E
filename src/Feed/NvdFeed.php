@@ -52,7 +52,9 @@ final readonly class NvdFeed implements FeedInterface
 
         $cpePrefix = $this->config->nvdCpePrefix() ?? $this->composerLockAnalyzer->detectCpePrefix();
         if ($cpePrefix !== null) {
-            $params['cpeName'] = $cpePrefix;
+            // virtualMatchString does prefix matching; cpeName requires an exact
+            // entry in the NVD CPE dictionary and 404s on vendor/product prefixes.
+            $params['virtualMatchString'] = $cpePrefix;
         }
 
         $headers = [];
@@ -74,8 +76,8 @@ final readonly class NvdFeed implements FeedInterface
             $response = $this->http->get($url, $headers);
 
             if (!$response->isOk()) {
-                if ($response->statusCode === 404 && $apiKey !== null) {
-                    $this->logger->error('NVD: HTTP 404 -- this usually means the API key is invalid or expired. Verify NVD_API_KEY in your .env file.');
+                if ($response->statusCode === 404) {
+                    $this->logger->error('NVD: HTTP 404 -- likely causes: (1) NVD_API_KEY is invalid or expired; (2) CPE filter is set but does not match an NVD dictionary entry. Verify NVD_API_KEY and NVD_CPE_PREFIX in your .env file.');
                 } else {
                     $this->logger->error('NVD: HTTP error', ['status' => $response->statusCode]);
                 }

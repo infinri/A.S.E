@@ -363,6 +363,35 @@ final class ComposerLockAnalyzerTest extends TestCase
         self::assertNull($this->makeAnalyzer($lockPath)->detectCpePrefix());
     }
 
+    #[Test]
+    public function getInstalledPackagesReturnsNameVersionMap(): void
+    {
+        $lockPath = $this->writeLockFile([
+            ['name' => 'magento/framework', 'version' => '103.0.0'],
+            ['name' => 'monolog/monolog', 'version' => 'v3.5.0'],
+        ]);
+
+        $packages = $this->makeAnalyzer($lockPath)->getInstalledPackages();
+
+        self::assertArrayHasKey('magento/framework', $packages);
+        self::assertArrayHasKey('monolog/monolog', $packages);
+        self::assertSame('103.0.0', $packages['magento/framework']);
+        self::assertSame('3.5.0', $packages['monolog/monolog']);
+    }
+
+    #[Test]
+    public function getInstalledPackagesReturnsEmptyWhenNoLockPath(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+        ]);
+
+        self::assertSame(
+            [],
+            (new ComposerLockAnalyzer($config, new NullLogger()))->getInstalledPackages(),
+        );
+    }
+
     private function makeAnalyzer(string $lockPath): ComposerLockAnalyzer
     {
         $config = ConfigTestHelper::create([

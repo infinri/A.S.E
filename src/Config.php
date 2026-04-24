@@ -29,7 +29,7 @@ final class Config
     /** @return string[] */
     public function enabledFeeds(): array
     {
-        $feeds = $this->get('ENABLED_FEEDS', 'kev,nvd,ghsa,osv,packagist');
+        $feeds = $this->get('ENABLED_FEEDS', 'kev,nvd,ghsa,packagist');
         return array_map('trim', explode(',', $feeds));
     }
 

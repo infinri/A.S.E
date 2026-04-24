@@ -106,7 +106,7 @@ Configuration is env-driven. Either export variables in your shell, drop them in
 
 | Variable | Description | Default |
 |---|---|---|
-| `ENABLED_FEEDS` | Comma-separated list of feeds to poll | `kev,nvd,ghsa,osv,packagist` |
+| `ENABLED_FEEDS` | Comma-separated list of feeds to poll. OSV is off by default -- add `osv` here to turn it on (see "Enabling OSV" below). | `kev,nvd,ghsa,packagist` |
 | `ECOSYSTEMS` | **Additive** -- merged with `composer` (auto-detected from your lockfile) | empty |
 | `VENDOR_FILTER` | **Additive** -- merged with vendor names parsed from your `composer.lock` (KEV filtering) | empty |
 | `NVD_CPE_PREFIX` | **Override** -- if set, replaces the auto-detected CPE. Auto-detection maps Magento edition: community -> `cpe:2.3:a:magento:magento`, enterprise -> `cpe:2.3:a:adobe:commerce` | auto |
@@ -197,9 +197,19 @@ Feeds with longer poll intervals (KEV, NVD at 2h) automatically skip runs where 
 Remove its name from `ENABLED_FEEDS` in `.env`. No code change needed.
 
 ```
-ENABLED_FEEDS=kev,nvd,ghsa
-# osv and packagist now skipped
+ENABLED_FEEDS=kev,nvd
+# ghsa and packagist now skipped
 ```
+
+### Enabling OSV
+
+OSV is off by default because Packagist advisories and GHSA both cover the Composer ecosystem already, and OSV aggregates GHSA. If you want OSV as a third cross-check, add it to the list:
+
+```
+ENABLED_FEEDS=kev,nvd,ghsa,packagist,osv
+```
+
+When enabled, OSV issues a single `POST /v1/querybatch` call populated from your `composer.lock` (one query per installed package), then hydrates each returned advisory via `/v1/vulns/{id}`.
 
 ## State and troubleshooting
 
