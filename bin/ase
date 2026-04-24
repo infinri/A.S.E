@@ -97,7 +97,7 @@ $logDir = dirname($logPath);
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0755, true);
 }
-$logger->pushHandler(new RotatingFileHandler($logPath, 7, Logger::DEBUG));
+$logger->pushHandler(new RotatingFileHandler($logPath, 7, $config->logFileLevel()));
 $stderrHandler = new StreamHandler('php://stderr', Logger::INFO);
 $stderrHandler->setFormatter(new JsonFormatter());
 $logger->pushHandler($stderrHandler);

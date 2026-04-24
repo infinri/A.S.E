@@ -191,8 +191,9 @@ final class Ase
             $lastPollTimestamp = $lastPoll ?? 'first_run';
 
             try {
-                $this->logger->info('Polling feed', ['feed' => $feedName]);
+                $startedAt = microtime(true);
                 $batch = $feed->poll($lastPollTimestamp);
+                $durationMs = (int) round((microtime(true) - $startedAt) * 1000);
                 $this->healthTracker->recordSuccess($feedName, $state);
 
                 $state['feed_cursors'][$feedName] = [
@@ -202,6 +203,7 @@ final class Ase
                 $this->logger->info('Feed poll complete', [
                     'feed' => $feedName,
                     'new_vulns' => count($batch),
+                    'duration_ms' => $durationMs,
                 ]);
 
                 $batches[] = $batch;

@@ -19,7 +19,7 @@ Most teams land in one of two failure modes:
 - **Alert fatigue.** A generic CVE feed pipes every CVSS >= 7 into Slack. After day three, the channel is muted. After week one, a real P0 gets missed.
 - **Blind spots.** The team subscribes to a single source (usually Adobe's security bulletin) and misses KEV additions, Packagist advisories for third-party modules, and EPSS spikes on old CVEs.
 
-ASE closes both gaps. It polls all five feeds, deduplicates across them, filters against your `composer.lock` so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal.
+ASE closes both gaps. It polls four feeds by default (KEV, NVD, GHSA, Packagist) -- with OSV available as an optional fifth -- deduplicates across them, filters against your `composer.lock` when configured so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal.
 
 **No flood on day one.** The first run imports the current state silently -- every existing vulnerability is marked as already-notified at its current priority, and nothing is posted to Slack. Subsequent runs only alert on genuinely new findings or priority escalations (e.g., a known CVE gets added to CISA KEV). Because only P0/P1 emits, and messages are throttled 1.5s apart, even a large backfill produces a bounded stream of alerts rather than a channel-drowning flood.
 
@@ -100,6 +100,7 @@ Configuration is env-driven. Either export variables in your shell, drop them in
 | `GITHUB_TOKEN` | GitHub PAT, public scope is enough (higher GHSA rate limit) | none |
 | `COMPOSER_LOCK_PATH` | Absolute path to your project's `composer.lock`. **Optional.** When set, enables Magento edition detection, vendor filter, CPE prefix auto-detection, and installed-version matching. When unset, ASE runs in project-agnostic mode (feeds still poll; composer-ecosystem filtering is disabled, warning logged). For Magento monitoring, set this. | none |
 | `SLACK_WEBHOOK_P1` | Optional second webhook for P1 alerts. When unset, P1 alerts are silently skipped (logged as a warning). | none |
+| `LOG_FILE_LEVEL` | Minimum level for the rotating file log. One of `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR`, `CRITICAL`, `ALERT`, `EMERGENCY` (case-insensitive). Set to `DEBUG` when troubleshooting to capture per-HTTP-request detail; leave at `INFO` otherwise to keep the file log tight. Stderr always streams at `INFO`. | `INFO` |
 
 ### Feed control
 
@@ -158,7 +159,7 @@ ASE only tracks and alerts on P0 and P1 findings. Anything below those threshold
 2. Enable Incoming Webhooks, add to target channel
 3. Set `SLACK_WEBHOOK_URL`
 
-KEV, OSV, EPSS, and Packagist need no authentication.
+KEV, EPSS, Packagist, and OSV (when enabled) need no authentication.
 
 ## Advanced deployment
 
@@ -234,7 +235,7 @@ Do this if you misconfigured webhooks and got a partial flood, swapped feeds, or
 
 ## Requirements
 
-- PHP 8.4+ with `curl`, `json`, `mbstring` at runtime
+- PHP 8.4+ with `curl`, `json`, `mbstring`, `openssl` at runtime (declared in `composer.json` `require`)
 - Composer 2.x for installation (`fileinfo` is needed during install, not at runtime)
 - `flock` (util-linux) if running under cron
 

@@ -75,6 +75,36 @@ final class ConfigTest extends TestCase
     }
 
     #[Test]
+    public function logFileLevelDefaultsToInfo(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+        ]);
+        self::assertSame(\Monolog\Level::Info->value, $config->logFileLevel());
+    }
+
+    #[Test]
+    public function logFileLevelMapsDebugString(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+            'LOG_FILE_LEVEL' => 'debug',
+        ]);
+        self::assertSame(\Monolog\Level::Debug->value, $config->logFileLevel());
+    }
+
+    #[Test]
+    public function logFileLevelRejectsUnknownValue(): void
+    {
+        $config = ConfigTestHelper::create([
+            'SLACK_WEBHOOK_URL' => 'https://hooks.slack.com/test',
+            'LOG_FILE_LEVEL' => 'verbose',
+        ]);
+        $this->expectException(\InvalidArgumentException::class);
+        $config->logFileLevel();
+    }
+
+    #[Test]
     public function composerLockPathReturnsEnvValueWhenSet(): void
     {
         $path = sys_get_temp_dir() . '/ase_cfg_envlock_' . uniqid() . '.lock';

@@ -11,6 +11,7 @@ use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
+use JsonException;
 use Psr\Log\LoggerInterface;
 
 final readonly class NvdFeed implements FeedInterface
@@ -31,6 +32,10 @@ final readonly class NvdFeed implements FeedInterface
         return 'nvd';
     }
 
+    /**
+     * @throws \DateMalformedStringException
+     * @throws JsonException
+     */
     #[\Override]
     public function poll(string $lastPollTimestamp): VulnerabilityBatch
     {

@@ -88,6 +88,22 @@ final class Config
         return $this->get('STATE_FILE', '/var/lib/ase/state.json');
     }
 
+    public function logFileLevel(): int
+    {
+        $raw = strtoupper($this->get('LOG_FILE_LEVEL', 'INFO'));
+        return match ($raw) {
+            'DEBUG' => \Monolog\Level::Debug->value,
+            'INFO' => \Monolog\Level::Info->value,
+            'NOTICE' => \Monolog\Level::Notice->value,
+            'WARNING' => \Monolog\Level::Warning->value,
+            'ERROR' => \Monolog\Level::Error->value,
+            'CRITICAL' => \Monolog\Level::Critical->value,
+            'ALERT' => \Monolog\Level::Alert->value,
+            'EMERGENCY' => \Monolog\Level::Emergency->value,
+            default => throw new \InvalidArgumentException("Unknown LOG_FILE_LEVEL: {$raw}"),
+        };
+    }
+
     public function logFilePath(): string
     {
         return $this->get('LOG_FILE', '/var/log/ase/ase.log');
