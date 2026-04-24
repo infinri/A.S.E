@@ -40,12 +40,12 @@ final class Ase
     public function run(bool $dryRun = false): RunResult
     {
         $runId = CorrelationId::generate();
-        $this->correlationIdProcessor->setRunId($runId);
+        $this->correlationIdProcessor->runId = $runId;
 
         try {
             return $this->runInternal($dryRun, $runId);
         } finally {
-            $this->correlationIdProcessor->setRunId(null);
+            $this->correlationIdProcessor->runId = null;
         }
     }
 
@@ -129,6 +129,7 @@ final class Ase
 
                 // Mark notified
                 foreach ([...$newAlerts, ...$escalations] as $vuln) {
+                    /** @var Vulnerability $vuln */
                     $allVulns[$vuln->canonicalId] = $vuln->withNotifiedAtPriority($vuln->priority);
                 }
 
@@ -248,12 +249,7 @@ final class Ase
     /** @param VulnerabilityBatch[] $batches */
     private function allBatchesEmpty(array $batches): bool
     {
-        foreach ($batches as $batch) {
-            if (!$batch->isEmpty()) {
-                return false;
-            }
-        }
-        return true;
+        return array_all($batches, static fn(VulnerabilityBatch $b): bool => $b->isEmpty());
     }
 
     /** @param array<string, mixed> $state */

@@ -9,12 +9,7 @@ use Monolog\Processor\ProcessorInterface;
 
 final class CorrelationIdProcessor implements ProcessorInterface
 {
-    private ?string $runId = null;
-
-    public function setRunId(?string $runId): void
-    {
-        $this->runId = $runId;
-    }
+    public ?string $runId = null;
 
     public function __invoke(LogRecord $record): LogRecord
     {

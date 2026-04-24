@@ -20,7 +20,7 @@ class CurlClient
     ) {}
 
     /** @param string[] $headers */
-    public function get(string $url, array $headers = []): HttpResponse
+    public function get(string $url, #[\SensitiveParameter] array $headers = []): HttpResponse
     {
         return $this->request('GET', $url, headers: $headers);
     }
@@ -28,8 +28,9 @@ class CurlClient
     /**
      * @param array<string, mixed>|string $body
      * @param string[] $headers
+     * @throws \JsonException
      */
-    public function post(string $url, array|string $body, array $headers = []): HttpResponse
+    public function post(string $url, array|string $body, #[\SensitiveParameter] array $headers = []): HttpResponse
     {
         $postBody = is_array($body) ? json_encode($body, JSON_THROW_ON_ERROR) : $body;
 
@@ -45,7 +46,7 @@ class CurlClient
         string $method,
         string $url,
         ?string $body = null,
-        array $headers = [],
+        #[\SensitiveParameter] array $headers = [],
     ): HttpResponse {
         for ($attempt = 0; $attempt <= self::MAX_RETRIES; $attempt++) {
             $response = $this->execute($method, $url, $body, $headers);
@@ -68,8 +69,7 @@ class CurlClient
             sleep($waitSeconds);
         }
 
-        // Unreachable, but satisfies static analysis
-        return $response;
+        throw new \LogicException('CurlClient retry loop exited without returning; invariant violated.');
     }
 
     /** @param string[] $headers */
@@ -77,7 +77,7 @@ class CurlClient
         string $method,
         string $url,
         ?string $body,
-        array $headers,
+        #[\SensitiveParameter] array $headers,
     ): HttpResponse {
         $this->logger->debug('HTTP request', ['method' => $method, 'url' => $url]);
 

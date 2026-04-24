@@ -11,6 +11,7 @@ use Ase\Model\AffectedPackage;
 use Ase\Model\Priority;
 use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
+use JsonException;
 use Psr\Log\LoggerInterface;
 
 final readonly class GitHubAdvisoryFeed implements FeedInterface
@@ -60,15 +61,15 @@ final readonly class GitHubAdvisoryFeed implements FeedInterface
     #[\Override]
     public function validateResponse(array $data): bool
     {
-        foreach ($data as $entry) {
-            if (!isset($entry['ghsa_id'], $entry['vulnerabilities'])) {
-                return false;
-            }
-        }
-        return true;
+        return array_all(
+            $data,
+            static fn(mixed $entry): bool => is_array($entry) && isset($entry['ghsa_id'], $entry['vulnerabilities']),
+        );
     }
-
-    /** @return Vulnerability[] */
+    
+    /** @return Vulnerability[]
+     * @throws JsonException
+     */
     private function pollEcosystem(string $ecosystem, string $lastPollTimestamp): array
     {
         $headers = ['Accept: application/vnd.github+json'];

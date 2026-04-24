@@ -37,6 +37,7 @@ final readonly class RunResult
         $exitCode = 0;
 
         foreach ([...$newAlerts, ...$escalations] as $vuln) {
+            /** @var Vulnerability $vuln */
             if ($vuln->priority === Priority::P0) {
                 $exitCode = 2;
                 break;

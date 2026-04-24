@@ -27,7 +27,7 @@ final class CorrelationIdProcessorTest extends TestCase
     public function testRecordExtraGetsRunIdWhenSet(): void
     {
         $processor = new CorrelationIdProcessor();
-        $processor->setRunId('abc-123');
+        $processor->runId = 'abc-123';
 
         $out = $processor($this->makeRecord());
 
@@ -38,8 +38,8 @@ final class CorrelationIdProcessorTest extends TestCase
     public function testSetRunIdNullClearsInjection(): void
     {
         $processor = new CorrelationIdProcessor();
-        $processor->setRunId('abc-123');
-        $processor->setRunId(null);
+        $processor->runId = 'abc-123';
+        $processor->runId = null;
 
         $out = $processor($this->makeRecord());
 
@@ -51,10 +51,10 @@ final class CorrelationIdProcessorTest extends TestCase
     {
         $processor = new CorrelationIdProcessor();
 
-        $processor->setRunId('first');
+        $processor->runId = 'first';
         $a = $processor($this->makeRecord());
 
-        $processor->setRunId('second');
+        $processor->runId = 'second';
         $b = $processor($this->makeRecord());
 
         self::assertSame('first', $a->extra['run_id']);

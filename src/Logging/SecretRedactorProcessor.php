@@ -26,14 +26,13 @@ final class SecretRedactorProcessor implements ProcessorInterface
      */
     private function scrubArray(array $values): array
     {
-        $out = [];
-        foreach ($values as $key => $value) {
-            $out[$key] = match (true) {
+        return array_map(
+            fn(mixed $value): mixed => match (true) {
                 is_string($value) => $this->redactor->redact($value),
                 is_array($value) => $this->scrubArray($value),
                 default => $value,
-            };
-        }
-        return $out;
+            },
+            $values,
+        );
     }
 }

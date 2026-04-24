@@ -27,6 +27,10 @@
     },
     "require": {
         "php": "^8.4",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "ext-openssl": "*",
         "composer/semver": "^3.4",
         "monolog/monolog": "^3.10",
         "vlucas/phpdotenv": "^5.6"

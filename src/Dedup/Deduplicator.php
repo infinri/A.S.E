@@ -9,10 +9,10 @@ use Ase\Model\Vulnerability;
 use Ase\Model\VulnerabilityBatch;
 use Psr\Log\LoggerInterface;
 
-final class Deduplicator
+final readonly class Deduplicator
 {
     public function __construct(
-        private readonly LoggerInterface $logger,
+        private LoggerInterface $logger,
     ) {}
 
     /**
@@ -187,6 +187,7 @@ final class Deduplicator
         $result = [];
 
         foreach ([...$existing, ...$incoming] as $pkg) {
+            /** @var AffectedPackage $pkg */
             $key = strtolower($pkg->ecosystem . ':' . $pkg->name);
             if (!isset($seen[$key])) {
                 $seen[$key] = true;
