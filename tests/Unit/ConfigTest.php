@@ -75,102 +75,46 @@ final class ConfigTest extends TestCase
     }
 
     #[Test]
-    public function testComposerLockPathWalksUpFromCwd(): void
+    public function composerLockPathReturnsEnvValueWhenSet(): void
     {
-        $projectDir = sys_get_temp_dir() . '/ase_cfg_walkup_' . uniqid();
-        $subDir = $projectDir . '/sub/nested';
-        mkdir($subDir, 0755, true);
-
-        $lockPath = $projectDir . '/composer.lock';
-        file_put_contents($lockPath, '{"packages":[]}');
-
-        $this->originalCwd = getcwd() ?: sys_get_temp_dir();
-        chdir($subDir);
-
-        $config = ConfigTestHelper::withoutWebhook();
-
-        $resolved = $config->composerLockPath();
-
-        self::assertNotNull($resolved);
-        self::assertSame(realpath($lockPath), realpath($resolved));
-
-        chdir($this->originalCwd);
-        $this->originalCwd = null;
-        unlink($lockPath);
-        @rmdir($subDir);
-        @rmdir($projectDir . '/sub');
-        @rmdir($projectDir);
-    }
-
-    #[Test]
-    public function testComposerLockPathUsesEnvFallbackWhenWalkUpFails(): void
-    {
-        $scratch = sys_get_temp_dir() . '/ase_cfg_nolock_' . uniqid();
-        mkdir($scratch, 0755, true);
-        $this->originalCwd = getcwd() ?: sys_get_temp_dir();
-        chdir($scratch);
-
-        $fallbackLock = sys_get_temp_dir() . '/ase_cfg_fallback_' . uniqid() . '.lock';
-        file_put_contents($fallbackLock, '{"packages":[]}');
+        $path = sys_get_temp_dir() . '/ase_cfg_envlock_' . uniqid() . '.lock';
+        file_put_contents($path, '{"packages":[]}');
 
         $config = ConfigTestHelper::create([
-            'COMPOSER_LOCK_PATH' => $fallbackLock,
+            'COMPOSER_LOCK_PATH' => $path,
         ]);
 
-        self::assertSame($fallbackLock, $config->composerLockPath());
+        self::assertSame($path, $config->composerLockPath());
 
-        chdir($this->originalCwd);
-        $this->originalCwd = null;
-        unlink($fallbackLock);
-        @rmdir($scratch);
+        unlink($path);
     }
 
     #[Test]
-    public function testComposerLockPathWalkUpWinsOverEnv(): void
+    public function composerLockPathReturnsNullWhenEnvUnset(): void
     {
-        $projectDir = sys_get_temp_dir() . '/ase_cfg_winover_' . uniqid();
-        mkdir($projectDir, 0755, true);
-        $walkUpLock = $projectDir . '/composer.lock';
-        file_put_contents($walkUpLock, '{"packages":[]}');
+        $config = ConfigTestHelper::withoutWebhook();
+        self::assertNull($config->composerLockPath());
+    }
 
-        $envLock = sys_get_temp_dir() . '/ase_cfg_env_' . uniqid() . '.lock';
-        file_put_contents($envLock, '{"packages":[]}');
+    #[Test]
+    public function composerLockPathIgnoresLocalComposerLockInCwd(): void
+    {
+        // Walk-up discovery has been removed. A composer.lock in CWD must NOT
+        // be picked up when COMPOSER_LOCK_PATH is unset.
+        $projectDir = sys_get_temp_dir() . '/ase_cfg_no_walkup_' . uniqid();
+        mkdir($projectDir, 0755, true);
+        $localLock = $projectDir . '/composer.lock';
+        file_put_contents($localLock, '{"packages":[]}');
 
         $this->originalCwd = getcwd() ?: sys_get_temp_dir();
         chdir($projectDir);
 
-        $config = ConfigTestHelper::create([
-            'COMPOSER_LOCK_PATH' => $envLock,
-        ]);
-
-        $resolved = $config->composerLockPath();
-        self::assertNotNull($resolved);
-        self::assertSame(realpath($walkUpLock), realpath($resolved));
-
-        chdir($this->originalCwd);
-        $this->originalCwd = null;
-        unlink($walkUpLock);
-        unlink($envLock);
-        @rmdir($projectDir);
-    }
-
-    #[Test]
-    public function testComposerLockPathReturnsNullWhenNeitherAvailable(): void
-    {
-        $scratch = sys_get_temp_dir() . '/ase_cfg_none_' . uniqid();
-        mkdir($scratch, 0755, true);
-        $this->originalCwd = getcwd() ?: sys_get_temp_dir();
-        chdir($scratch);
-
-        // Nothing in walk-up from this sibling scratch dir, no COMPOSER_LOCK_PATH.
-        // But walk-up from /tmp/ase_cfg_none_X will hit /, where there's no composer.lock.
-        // However, if sys_get_temp_dir parents have a composer.lock we'd find it.
-        // We chdir into a dedicated scratch dir, so walk-up only passes through /tmp and /.
         $config = ConfigTestHelper::withoutWebhook();
         self::assertNull($config->composerLockPath());
 
         chdir($this->originalCwd);
         $this->originalCwd = null;
-        @rmdir($scratch);
+        unlink($localLock);
+        @rmdir($projectDir);
     }
 }

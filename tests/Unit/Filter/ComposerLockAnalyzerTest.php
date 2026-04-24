@@ -16,25 +16,15 @@ use Psr\Log\NullLogger;
 final class ComposerLockAnalyzerTest extends TestCase
 {
     private string $tmpDir;
-    private string $originalCwd;
 
     protected function setUp(): void
     {
-        $this->originalCwd = getcwd() ?: sys_get_temp_dir();
         $this->tmpDir = sys_get_temp_dir() . '/ase_lock_test_' . uniqid();
         mkdir($this->tmpDir, 0755, true);
-        // chdir into an empty sub-dir so Config::composerLockPath() walk-up
-        // does not discover the ase project's own composer.lock.
-        $cwdScratch = $this->tmpDir . '/cwd';
-        mkdir($cwdScratch, 0755, true);
-        chdir($cwdScratch);
     }
 
     protected function tearDown(): void
     {
-        chdir($this->originalCwd);
-        $cwdScratch = $this->tmpDir . '/cwd';
-        @rmdir($cwdScratch);
         $files = glob($this->tmpDir . '/*');
         if ($files !== false) {
             array_map('unlink', $files);

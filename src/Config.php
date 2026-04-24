@@ -100,34 +100,7 @@ final class Config
 
     public function composerLockPath(): ?string
     {
-        $cwd = getcwd();
-        $walkUp = $this->findComposerLockUpwards($cwd === false ? null : $cwd);
-        if ($walkUp !== null) {
-            return $walkUp;
-        }
-
         return $this->getOptional('COMPOSER_LOCK_PATH');
-    }
-
-    private function findComposerLockUpwards(?string $startDir): ?string
-    {
-        if ($startDir === null || $startDir === '') {
-            return null;
-        }
-
-        $dir = $startDir;
-        while (true) {
-            $candidate = $dir . DIRECTORY_SEPARATOR . 'composer.lock';
-            if (is_file($candidate)) {
-                return $candidate;
-            }
-
-            $parent = dirname($dir);
-            if ($parent === $dir) {
-                return null;
-            }
-            $dir = $parent;
-        }
     }
 
     public function epssHighThreshold(): float

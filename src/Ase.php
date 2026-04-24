@@ -53,6 +53,14 @@ final class Ase
     {
         $this->logger->info('A.S.E. run started', ['dry_run' => $dryRun, 'run_id' => $runId]);
 
+        if ($this->config->composerLockPath() === null) {
+            $this->logger->warning(
+                'COMPOSER_LOCK_PATH not set -- running in project-agnostic mode. '
+                . 'Composer-ecosystem filtering (Magento detection, vendor filter, CPE prefix, installed-version matching) is disabled. '
+                . 'Set COMPOSER_LOCK_PATH in .env to enable, or set NVD_CPE_PREFIX / VENDOR_FILTER / ECOSYSTEMS manually to filter feed output.'
+            );
+        }
+
         $state = $this->stateManager->load();
         $isFirstRun = $this->stateManager->isFirstRun();
 
