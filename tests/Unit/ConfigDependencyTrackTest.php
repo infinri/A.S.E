@@ -38,6 +38,32 @@ final class ConfigDependencyTrackTest extends TestCase
         $config->dtrackUrl();
     }
 
+    public function testParsesAlertRoutes(): void
+    {
+        $config = ConfigTestHelper::create([
+            'ASE_ALERT_ROUTES' => '"team:eco=https://hooks.example/a, team:infra=https://hooks.example/b"',
+        ]);
+
+        self::assertSame([
+            'team:eco' => 'https://hooks.example/a',
+            'team:infra' => 'https://hooks.example/b',
+        ], $config->alertRoutes());
+    }
+
+    public function testAlertRoutesEmptyWhenUnset(): void
+    {
+        self::assertSame([], ConfigTestHelper::create(['ASE_ALERT_ROUTES' => ''])->alertRoutes());
+    }
+
+    public function testThrowsOnMalformedAlertRoute(): void
+    {
+        $config = ConfigTestHelper::create(['ASE_ALERT_ROUTES' => 'team-without-url']);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('team-without-url');
+        $config->alertRoutes();
+    }
+
     public function testNormalizesDtrackUrlTrailingSlash(): void
     {
         $config = ConfigTestHelper::create([

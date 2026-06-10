@@ -30,7 +30,8 @@ First boot pulls vulnerability feeds; allow time before findings appear.
 ## Bootstrap (browser, once)
 
 1. http://localhost:8081, admin/admin, forced password change; store the credential.
-2. Create team `automation`, permissions exactly BOM_UPLOAD and PROJECT_CREATION_UPLOAD.
+2. Create team `automation`, permissions: BOM_UPLOAD, PROJECT_CREATION_UPLOAD,
+   VIEW_PORTFOLIO, VIEW_VULNERABILITY (the read permissions serve `bin/ase-alert`).
 3. Generate an API key on that team: this is DTRACK_API_KEY in A.S.E's .env.
 4. Verify feed sync under Administration > Vulnerability Sources.
 5. Smoke test: `curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8080/api/version` expecting 200.

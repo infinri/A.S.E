@@ -1,0 +1,113 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+use Ase\Alert\AlertCursor;
+use Ase\Alert\AlertRouter;
+use Ase\Alert\FindingMapper;
+use Ase\Config;
+use Ase\DependencyTrack\FindingsFetcher;
+use Ase\Feed\KevCatalog;
+use Ase\Http\CurlClient;
+use Ase\Logging\CorrelationIdProcessor;
+use Ase\Logging\SecretRedactor;
+use Ase\Logging\SecretRedactorProcessor;
+use Ase\Notify\SlackMessage;
+use Ase\Scoring\PriorityCalculator;
+use Monolog\Formatter\JsonFormatter;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
+
+$config = new Config();
+
+$secretRedactor = new SecretRedactor();
+$secretRedactor->registerSecret($config->dtrackApiKey(), 'dtrack-api-key');
+foreach ($config->alertRoutes() as $webhook) {
+    $secretRedactor->registerSecret($webhook, 'slack-webhook');
+}
+
+$logger = new Logger('ase-alert');
+$stderrHandler = new StreamHandler('php://stderr', Logger::INFO);
+$stderrHandler->setFormatter(new JsonFormatter());
+$logger->pushHandler($stderrHandler);
+$logger->pushProcessor(new SecretRedactorProcessor($secretRedactor));
+$logger->pushProcessor(new CorrelationIdProcessor());
+
+$http = new CurlClient($logger);
+$fetcher = new FindingsFetcher($http, $config->dtrackUrl(), $config->dtrackApiKey(), $logger);
+$mapper = new FindingMapper(new KevCatalog($http, $logger));
+$calculator = new PriorityCalculator($config);
+$router = new AlertRouter($config->alertRoutes(), $config->alertDefaultWebhook());
+$cursor = new AlertCursor($config->alertCursorPath());
+
+$since = $cursor->get();
+$maxSeen = $since;
+$alertsSent = 0;
+$failures = 0;
+
+foreach ($fetcher->projects() as $project) {
+    try {
+        $findings = $fetcher->findingsForProject($project['uuid']);
+    } catch (\Throwable $e) {
+        $failures++;
+        $logger->error('Findings fetch failed', ['project' => $project['name'], 'error' => $e->getMessage()]);
+        continue;
+    }
+
+    $webhooks = $router->webhooksForTags($project['tags']);
+
+    foreach ($findings as $finding) {
+        $attributedOn = (int) ($finding['attribution']['attributedOn'] ?? 0);
+        if ($attributedOn <= $since) {
+            continue;
+        }
+        $maxSeen = max($maxSeen, $attributedOn);
+
+        try {
+            $vuln = $mapper->map($finding);
+        } catch (\Throwable $e) {
+            $failures++;
+            $logger->error('Finding mapping failed', ['project' => $project['name'], 'error' => $e->getMessage()]);
+            continue;
+        }
+
+        $priority = $calculator->classify($vuln);
+        if ($priority === null) {
+            continue;
+        }
+        if ($webhooks === []) {
+            $logger->warning('Alert-worthy finding has no route', [
+                'project' => $project['name'],
+                'vuln' => $vuln->canonicalId,
+                'priority' => $priority->name,
+            ]);
+            continue;
+        }
+
+        $payload = SlackMessage::forVulnerability($vuln->withPriority($priority))->toPayload();
+        foreach ($webhooks as $webhook) {
+            $response = $http->post($webhook, $payload);
+            if ($response->isOk()) {
+                $alertsSent++;
+            } else {
+                $failures++;
+                $logger->error('Slack post failed', [
+                    'project' => $project['name'],
+                    'vuln' => $vuln->canonicalId,
+                    'status' => $response->statusCode,
+                ]);
+            }
+            usleep(1_500_000);
+        }
+    }
+}
+
+// Cursor only advances on a clean run so failed alerts retry next cycle.
+if ($maxSeen > $since && $failures === 0) {
+    $cursor->set($maxSeen);
+}
+$logger->info('ase-alert run complete', ['alerts' => $alertsSent, 'failures' => $failures]);
+exit($failures === 0 ? 0 : 1);

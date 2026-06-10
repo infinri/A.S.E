@@ -159,6 +159,38 @@ final class Config
         return $projects;
     }
 
+    /** @return array<string, string> project tag => Slack webhook URL */
+    public function alertRoutes(): array
+    {
+        $spec = $this->getOptional('ASE_ALERT_ROUTES');
+        if ($spec === null) {
+            return [];
+        }
+
+        $routes = [];
+        foreach (explode(',', $spec) as $entry) {
+            $entry = trim($entry);
+            if (!str_contains($entry, '=')) {
+                throw new \RuntimeException(
+                    "ASE_ALERT_ROUTES entry \"{$entry}\" is malformed: expected tag=webhook-url."
+                );
+            }
+            [$tag, $url] = explode('=', $entry, 2);
+            $routes[trim($tag)] = trim($url);
+        }
+        return $routes;
+    }
+
+    public function alertDefaultWebhook(): ?string
+    {
+        return $this->getOptional('ASE_ALERT_DEFAULT_WEBHOOK');
+    }
+
+    public function alertCursorPath(): string
+    {
+        return $this->get('ASE_ALERT_CURSOR_PATH', dirname(__DIR__) . '/var/state/alert-cursor.json');
+    }
+
     public function epssHighThreshold(): float
     {
         return (float) $this->get('EPSS_HIGH_THRESHOLD', '0.10');
