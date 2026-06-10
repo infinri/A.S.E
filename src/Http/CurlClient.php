@@ -57,7 +57,10 @@ class CurlClient
         return $this->request('PUT', $url, $putBody, $headers);
     }
 
-    /** @param string[] $headers */
+    /**
+     * @param non-empty-string $method
+     * @param string[] $headers
+     */
     private function request(
         string $method,
         string $url,
@@ -88,7 +91,10 @@ class CurlClient
         throw new \LogicException('CurlClient retry loop exited without returning; invariant violated.');
     }
 
-    /** @param string[] $headers */
+    /**
+     * @param non-empty-string $method
+     * @param string[] $headers
+     */
     private function execute(
         string $method,
         string $url,
@@ -124,15 +130,16 @@ class CurlClient
 
         if ($method === 'POST') {
             curl_setopt($ch, CURLOPT_POST, true);
-            if ($body !== null) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-            }
+        } elseif ($method !== 'GET') {
+            curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        }
+        if ($body !== null) {
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
         }
 
         $rawResponse = curl_exec($ch);
         $statusCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $error = curl_error($ch);
-        curl_close($ch);
 
         $responseBody = is_string($rawResponse) ? $rawResponse : false;
 
