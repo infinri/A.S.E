@@ -41,6 +41,22 @@ class CurlClient
         return $this->request('POST', $url, $postBody, $headers);
     }
 
+    /**
+     * @param array<string, mixed>|string $body
+     * @param string[] $headers
+     * @throws \JsonException
+     */
+    public function put(string $url, array|string $body, #[\SensitiveParameter] array $headers = []): HttpResponse
+    {
+        $putBody = is_array($body) ? json_encode($body, JSON_THROW_ON_ERROR) : $body;
+
+        if (is_array($body)) {
+            $headers[] = 'Content-Type: application/json';
+        }
+
+        return $this->request('PUT', $url, $putBody, $headers);
+    }
+
     /** @param string[] $headers */
     private function request(
         string $method,

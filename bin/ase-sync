@@ -1,0 +1,49 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+use Ase\Config;
+use Ase\DependencyTrack\BomUploader;
+use Ase\Http\CurlClient;
+use Ase\Logging\CorrelationIdProcessor;
+use Ase\Logging\SecretRedactor;
+use Ase\Logging\SecretRedactorProcessor;
+use Ase\Sbom\ComposerLockSbomBuilder;
+use Monolog\Formatter\JsonFormatter;
+use Monolog\Handler\StreamHandler;
+use Monolog\Logger;
+
+$config = new Config();
+
+$secretRedactor = new SecretRedactor();
+$secretRedactor->registerSecret($config->dtrackApiKey(), 'dtrack-api-key');
+
+$logger = new Logger('ase-sync');
+$stderrHandler = new StreamHandler('php://stderr', Logger::INFO);
+$stderrHandler->setFormatter(new JsonFormatter());
+$logger->pushHandler($stderrHandler);
+$logger->pushProcessor(new SecretRedactorProcessor($secretRedactor));
+$logger->pushProcessor(new CorrelationIdProcessor());
+
+$builder = new ComposerLockSbomBuilder();
+$uploader = new BomUploader(
+    new CurlClient($logger),
+    $config->dtrackUrl(),
+    $config->dtrackApiKey(),
+    $logger,
+);
+
+$failures = 0;
+foreach ($config->projects() as $name => $lockfilePath) {
+    try {
+        $uploader->upload($name, 'main', $builder->build($lockfilePath));
+    } catch (\Throwable $e) {
+        $failures++;
+        $logger->error('Sync failed for project', ['project' => $name, 'error' => $e->getMessage()]);
+    }
+}
+
+exit($failures === 0 ? 0 : 1);

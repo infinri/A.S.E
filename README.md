@@ -3,6 +3,13 @@
 [![Packagist Version](https://img.shields.io/packagist/v/infinri/ase.svg)](https://packagist.org/packages/infinri/ase)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
+> **Rebuild in progress (2026-06).** A.S.E is being rebuilt around OWASP
+> Dependency-Track: Dependency-Track is the engine and UI
+> ([docs/dependency-track-install.md](docs/dependency-track-install.md)), and A.S.E
+> syncs project lockfiles into it (`bin/ase-sync`, configured via `ASE_PROJECTS`).
+> Plans: [docs/planning/](docs/planning/). The original CLI documented below stays
+> in-tree until the alerting slice replaces it; tag `mvp-final` preserves it.
+
 CVE monitoring for Magento / Adobe Commerce / Mage-OS stores. One command, one Slack channel, one exit code for CI.
 
 <!-- DEMO: asciinema recording TBD. A 15-second terminal capture of `ase --dry-run --format=json`

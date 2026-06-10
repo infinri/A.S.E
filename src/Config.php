@@ -119,6 +119,46 @@ final class Config
         return $this->getOptional('COMPOSER_LOCK_PATH');
     }
 
+    public function dtrackUrl(): string
+    {
+        $url = $this->getOptional('DTRACK_URL');
+        if ($url === null) {
+            throw new \RuntimeException('DTRACK_URL is required for Dependency-Track sync but is not set.');
+        }
+        return rtrim($url, '/');
+    }
+
+    public function dtrackApiKey(): string
+    {
+        $key = $this->getOptional('DTRACK_API_KEY');
+        if ($key === null) {
+            throw new \RuntimeException('DTRACK_API_KEY is required for Dependency-Track sync but is not set.');
+        }
+        return $key;
+    }
+
+    /** @return array<string, string> project name => lockfile path */
+    public function projects(): array
+    {
+        $spec = $this->getOptional('ASE_PROJECTS');
+        if ($spec === null) {
+            throw new \RuntimeException('ASE_PROJECTS is required: comma-separated name:path entries.');
+        }
+
+        $projects = [];
+        foreach (explode(',', $spec) as $entry) {
+            $entry = trim($entry);
+            if (!str_contains($entry, ':')) {
+                throw new \RuntimeException(
+                    "ASE_PROJECTS entry \"{$entry}\" is malformed: expected name:/absolute/path/to/lockfile."
+                );
+            }
+            [$name, $path] = explode(':', $entry, 2);
+            $projects[trim($name)] = trim($path);
+        }
+        return $projects;
+    }
+
     public function epssHighThreshold(): float
     {
         return (float) $this->get('EPSS_HIGH_THRESHOLD', '0.10');
