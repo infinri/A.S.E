@@ -67,13 +67,15 @@ compound conditions. The KEV result decides WS5's shape.
 
 ## WS5: Alerting slice
 
+Resolved 2026-06-10 (see [ws4-findings.md](ws4-findings.md)): Dependency-Track 5.0.0
+carries no CISA KEV data at all, so the `ase-alert` path is confirmed as required.
 A.S.E's existing `Scoring/PriorityCalculator`, `Model/Priority`, `Notify/SlackMessage`,
 `Notify/SlackNotifier`, `Feed/KevFeed`, `Feed/EpssFeed` are already in this repo with
-tests; no porting needed. If WS4 shows native policy plus Slack publisher covers P0/P1
-and KEV, this slice shrinks to configuration and the legacy alerting code retires. If
-not, a small `ase-alert` entrypoint consumes Dependency-Track webhooks (or polls its
-API), applies the existing scoring, and routes to per-team Slack webhooks resolved from
-project tags. Stateless; no feed polling beyond KEV/EPSS lookups.
+tests; `ase-alert` reads new findings from the Dependency-Track API, applies the
+existing P0/P1 scoring (KEV membership, EPSS/CVSS thresholds, ransomware association),
+and routes to per-team Slack webhooks resolved from project tags. Stateless beyond a
+last-seen cursor; no feed polling except KEV/EPSS lookups. EPSS/severity tiers also
+exist natively as Dependency-Track policies (verified working) for UI visibility.
 
 ## WS6: Validation, cleanup, process
 
