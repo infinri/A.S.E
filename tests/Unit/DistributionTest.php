@@ -44,7 +44,8 @@ final class DistributionTest extends TestCase
 
         self::assertArrayHasKey('bin', $composer);
         self::assertIsArray($composer['bin']);
-        self::assertContains('bin/ase', $composer['bin']);
+        self::assertContains('bin/ase-sync', $composer['bin']);
+        self::assertContains('bin/ase-alert', $composer['bin']);
     }
 
     #[Test]
@@ -73,6 +74,7 @@ final class DistributionTest extends TestCase
 
         $contents = (string) file_get_contents($path);
         self::assertStringContainsString('Keep a Changelog', $contents);
+        self::assertStringContainsString('## [2.0.0]', $contents);
         self::assertStringContainsString('## [1.0.0]', $contents);
     }
 
@@ -88,32 +90,36 @@ final class DistributionTest extends TestCase
     }
 
     #[Test]
-    public function testBinFileExistsAndIsRunnable(): void
+    public function testBinFilesExistAndAreRunnable(): void
     {
-        $path = $this->repoRoot . '/bin/ase';
-        self::assertFileExists($path);
+        foreach (['bin/ase-sync', 'bin/ase-alert'] as $bin) {
+            $path = $this->repoRoot . '/' . $bin;
+            self::assertFileExists($path);
 
-        $handle = fopen($path, 'r');
-        self::assertNotFalse($handle);
-        $firstLine = (string) fgets($handle);
-        fclose($handle);
-        self::assertStringStartsWith('#!/usr/bin/env php', $firstLine);
+            $handle = fopen($path, 'r');
+            self::assertNotFalse($handle);
+            $firstLine = (string) fgets($handle);
+            fclose($handle);
+            self::assertStringStartsWith('#!/usr/bin/env php', $firstLine);
+        }
     }
 
     #[Test]
-    public function testBinPhpLegacyPathRemoved(): void
+    public function testLegacyCliRemoved(): void
     {
+        self::assertFileDoesNotExist($this->repoRoot . '/bin/ase');
         self::assertFileDoesNotExist($this->repoRoot . '/bin/ase.php');
     }
 
     #[Test]
-    public function testReadmeLeadsWithProblemStatement(): void
+    public function testReadmeDescribesThePlatform(): void
     {
         $readme = (string) file_get_contents($this->repoRoot . '/README.md');
         self::assertNotEmpty($readme);
-        self::assertStringContainsString('composer global require infinri/ase', $readme);
-        self::assertStringContainsString('--dry-run', $readme);
-        self::assertStringContainsString('--format', $readme);
+        self::assertStringContainsString('Dependency-Track', $readme);
+        self::assertStringContainsString('ase-sync', $readme);
+        self::assertStringContainsString('ase-alert', $readme);
+        self::assertStringContainsString('declared-tech', $readme);
     }
 
     /**

@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.0] - 2026-06-11
+
+Rebuilt around OWASP Dependency-Track. The engine, UI, dashboards, and feed
+mirroring moved to Dependency-Track 5.0 (install: docs/dependency-track-install.md);
+A.S.E became the automation around it. Architecture and rationale:
+docs/planning/, parity evidence: docs/parity-report.md.
+
+### Added
+
+- `bin/ase-sync`: converts configured composer lockfiles (`ASE_PROJECTS`) and the
+  declared-tech inventory (`inventory/declared-tech.yaml`, per-owner projects) to
+  CycloneDX SBOMs and uploads them to Dependency-Track.
+- `bin/ase-alert`: polls Dependency-Track findings past a cursor, scores P0/P1
+  (CISA KEV membership, ransomware association, CVSS/EPSS thresholds), routes by
+  project tag to per-team Slack webhooks (`ASE_ALERT_ROUTES`).
+- `bin/dtrack-enable-osv.sh`: required install step; a fresh Dependency-Track 5.0
+  mirrors only NVD+EPSS and silently matches nothing for composer/npm otherwise.
+- `CurlClient::put()`; PUT requests previously went out as bodyless GETs.
+- docs: runbook, install guide, parity report, planning documents.
+- CI workflow: composer audit (merge gate), PHPStan, PHPUnit.
+
+### Removed
+
+- Legacy feed pollers (KEV/NVD/GHSA/OSV/Packagist), deduplicator, state manager,
+  feed health tracking, composer.lock analyzer, `bin/ase`, `bin/heartbeat.sh`.
+  Dependency-Track owns feed ingestion and matching now. Tag `mvp-final`
+  preserves the 1.0.0 implementation. Retained: scoring (`PriorityCalculator`),
+  Slack message format, HTTP client, logging/redaction.
+
 ## [1.0.0] - 2026-04-24
 
 First public release. CVE monitoring for Magento / Adobe Commerce / Mage-OS stores: polls KEV, NVD, GHSA, and Packagist (with OSV available as an optional fifth feed), deduplicates across them, scores by CVSS + EPSS + KEV, and alerts to Slack on P0 and P1 only.

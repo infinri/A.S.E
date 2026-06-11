@@ -3,278 +3,64 @@
 [![Packagist Version](https://img.shields.io/packagist/v/infinri/ase.svg)](https://packagist.org/packages/infinri/ase)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-> **Rebuild in progress (2026-06).** A.S.E is being rebuilt around OWASP
-> Dependency-Track: Dependency-Track is the engine and UI
-> ([docs/dependency-track-install.md](docs/dependency-track-install.md)), and A.S.E
-> syncs project lockfiles and the declared-tech inventory
-> ([inventory/declared-tech.yaml](inventory/declared-tech.yaml)) into it
-> (`bin/ase-sync`, configured via `ASE_PROJECTS`)
-> and alerts per-team Slack channels with KEV/EPSS-scored P0/P1 findings
-> (`bin/ase-alert`, configured via `ASE_ALERT_ROUTES`).
-> Plans: [docs/planning/](docs/planning/). The original CLI documented below stays
-> in-tree until the alerting slice replaces it; tag `mvp-final` preserves it.
+Vulnerability management built around [OWASP Dependency-Track](https://dependencytrack.org/):
+Dependency-Track is the engine and UI; A.S.E is the automation that feeds it and alerts
+from it. Get told about a CVE only when it affects something you actually run, in the
+Slack channel of the team that owns it, ranked by real-world exploitability.
 
-CVE monitoring for Magento / Adobe Commerce / Mage-OS stores. One command, one Slack channel, one exit code for CI.
+> The original 1.0.0 A.S.E was a standalone feed-polling CLI; it lives on at tag
+> [`mvp-final`](https://github.com/infinri/A.S.E/releases). The 2.x rebuild moved feed
+> ingestion and matching to Dependency-Track and kept the parts that earned it: the
+> KEV/EPSS/CVSS scoring and the Slack alert format. Why and how:
+> [docs/planning/](docs/planning/), [docs/parity-report.md](docs/parity-report.md).
 
-<!-- DEMO: asciinema recording TBD. A 15-second terminal capture of `ase --dry-run --format=json`
-     catching a KEV-listed CVE belongs right here, before "What it catches". -->
-
----
-
-## Why this exists
-
-Magento stores live downstream of a noisy security ecosystem. CISA KEV, NVD, GitHub Security Advisories, OSV, and Packagist each publish vulnerability data with different coverage, latency, and signal-to-noise. Reading all five by hand is nobody's job. Skipping them is how stores get popped.
-
-Most teams land in one of two failure modes:
-
-- **Alert fatigue.** A generic CVE feed pipes every CVSS >= 7 into Slack. After day three, the channel is muted. After week one, a real P0 gets missed.
-- **Blind spots.** The team subscribes to a single source (usually Adobe's security bulletin) and misses KEV additions, Packagist advisories for third-party modules, and EPSS spikes on old CVEs.
-
-ASE closes both gaps. It polls four feeds by default (KEV, NVD, GHSA, Packagist) -- with OSV available as an optional fifth -- deduplicates across them, filters against your `composer.lock` when configured so it only shows CVEs that actually affect installed versions, scores every finding with CVSS + EPSS + KEV, and alerts on just P0 and P1 -- the two tiers worth a ping. Anything below P1 is dropped before notification so the Slack channel stays signal.
-
-**No flood on day one.** The first run imports the current state silently -- every existing vulnerability is marked as already-notified at its current priority, and nothing is posted to Slack. Subsequent runs only alert on genuinely new findings or priority escalations (e.g., a known CVE gets added to CISA KEV). Because only P0/P1 emits, and messages are throttled 1.5s apart, even a large backfill produces a bounded stream of alerts rather than a channel-drowning flood.
-
-It is a CLI. It runs under cron. It exits `0`, `1`, or `2` based on what it found, so you can gate a CI pipeline on it. That's the whole surface.
-
-## What it catches
-
-A KEV-listed RCE drops against a Magento module you have installed. ASE polls KEV on its next cycle, matches the CVE's vulnerable range against your `composer.lock`, classifies it as P0, posts a Slack alert with:
-
-- CVE ID and canonical description
-- CVSS score and vector, EPSS percentile, KEV status
-- Exact installed version vs. fixed version
-- Links to NVD, GHSA (if cross-referenced), and the Packagist page for the fixed release
-- A one-line composer update command to remediate
-
-If you ran it in CI that same hour, `ase --dry-run --format=json` would have exited `2` and failed the deploy.
-
-## Quick start
-
-```bash
-# Install globally (adds `ase` to your PATH)
-composer global require infinri/ase
-
-# Minimal config: one Slack webhook
-export SLACK_WEBHOOK_URL='https://hooks.slack.com/services/...'
-
-# Point ASE at your project's composer.lock, then scan without sending alerts.
-export COMPOSER_LOCK_PATH=/path/to/your/magento/project/composer.lock
-ase --dry-run --format=json
-
-# Optional: verify your webhook wiring before scheduling under cron
-ase --test-alert
-```
-
-`COMPOSER_LOCK_PATH` is optional. When set, ASE auto-detects Magento edition, the vendor list, the NVD CPE prefix, and runs installed-version matching. When unset, ASE runs in project-agnostic mode: feeds still poll, but composer-ecosystem filtering is disabled and a warning is logged. For Magento monitoring, always set it -- in `.env` for production/cron, or `export` for ad-hoc runs.
-
-`--dry-run` doesn't touch Slack or persist state. `--format=json` emits a machine-readable report to stdout; operational logs stream to **stderr in JSON format (one object per line)**, so `--format=json` output on stdout is always clean for piping into `jq`, CI artifacts, or a log shipper. Together they're the safe way to evaluate ASE before wiring it into a real channel.
-
-`--test-alert` posts a sample P0 (and a P1 if `SLACK_WEBHOOK_P1` is set) to the configured webhooks so you can verify the Slack side is connected without waiting for a real CVE to drop.
-
-When you're ready for notifications, drop `--dry-run` and schedule under cron (example below).
-
-## CLI reference
+## How it fits together
 
 ```
-ase [flags]
-
-Flags:
-  --dry-run                Scan but do not send Slack alerts or persist state
-  --format=<human|json>    Output format (default: human)
-  --since <YYYY-MM-DD>     Backfill from a specific date (first run only)
-  --test-slack             Send a test message to the configured channel and exit
-  --test-alert             Send a P0 sample (and a P1 sample if SLACK_WEBHOOK_P1 is set) for wiring verification
-
-Exit codes:
-  0                        No P0 or P1 finding in the alertable set
-  1                        At least one P1 (and no P0) in the alertable set
-  2                        At least one P0 in the alertable set, or a fatal config error
+composer.lock files ──┐
+                      ├── bin/ase-sync ──> Dependency-Track <── NVD / OSV / EPSS mirrors
+declared-tech.yaml ───┘                      (engine + UI)
+                                                  │ findings
+                                            bin/ase-alert
+                                  (P0/P1 scoring: CISA KEV + EPSS + CVSS)
+                                                  │
+                                    per-team Slack channels (by project tag)
 ```
 
-The alertable set is what *this run* would alert on: new findings plus priority escalations. Already-notified findings at the same priority don't count.
+- **`bin/ase-sync`** (cron): converts each configured lockfile (`ASE_PROJECTS`) and the
+  declared-tech inventory ([inventory/declared-tech.yaml](inventory/declared-tech.yaml),
+  one Dependency-Track project per owning team) into CycloneDX SBOMs and uploads them.
+- **`bin/ase-alert`** (cron): reads new findings, classifies P0/P1, posts to the owning
+  team's webhook (`ASE_ALERT_ROUTES`). P0: in CISA's Known Exploited Vulnerabilities
+  catalog, or CVSS >= 9.0 with EPSS >= 10%. P1: ransomware-associated, or high severity
+  affecting an installed version. Below P1 stays in the UI, off Slack.
+- **Dependency-Track** does everything else: feed mirroring, version matching,
+  dashboards, audit trails, policy. One-time install: [docs/dependency-track-install.md](docs/dependency-track-install.md)
+  (including the required `bin/dtrack-enable-osv.sh` step).
 
-## Configuration
+## Setup
 
-Configuration is env-driven. Either export variables in your shell, drop them in a `.env` next to the binary, or put them in your system cron environment.
+Prerequisites: PHP 8.4+, composer, a running Dependency-Track instance (install doc above).
 
-### Required (for normal runs)
+    composer install
+    cp .env.example .env    # set DTRACK_URL, DTRACK_API_KEY, ASE_PROJECTS, ASE_ALERT_ROUTES
 
-| Variable | Description |
-|---|---|
-| `SLACK_WEBHOOK_URL` | Slack incoming webhook URL. Optional when using `--dry-run` or `--format=json`. |
+Cron, on a host that can reach Dependency-Track and the lockfiles:
 
-### Recommended
+    */30 * * * *  cd /opt/ase && bin/ase-sync
+    */30 * * * *  cd /opt/ase && sleep 600 && bin/ase-alert
 
-| Variable | Description | Default |
-|---|---|---|
-| `NVD_API_KEY` | Free NVD API key (lifts rate limit from 5 to 50 req/30s) | none |
-| `GITHUB_TOKEN` | GitHub PAT, public scope is enough (higher GHSA rate limit) | none |
-| `COMPOSER_LOCK_PATH` | Absolute path to your project's `composer.lock`. **Optional.** When set, enables Magento edition detection, vendor filter, CPE prefix auto-detection, and installed-version matching. When unset, ASE runs in project-agnostic mode (feeds still poll; composer-ecosystem filtering is disabled, warning logged). For Magento monitoring, set this. | none |
-| `SLACK_WEBHOOK_P1` | Optional second webhook for P1 alerts. When unset, P1 alerts are silently skipped (logged as a warning). | none |
-| `LOG_FILE_LEVEL` | Minimum level for the rotating file log. One of `DEBUG`, `INFO`, `NOTICE`, `WARNING`, `ERROR`, `CRITICAL`, `ALERT`, `EMERGENCY` (case-insensitive). Set to `DEBUG` when troubleshooting to capture per-HTTP-request detail; leave at `INFO` otherwise to keep the file log tight. Stderr always streams at `INFO`. | `INFO` |
-
-### Feed control
-
-| Variable | Description | Default |
-|---|---|---|
-| `ENABLED_FEEDS` | Comma-separated list of feeds to poll. OSV is off by default -- add `osv` here to turn it on (see "Enabling OSV" below). | `kev,nvd,ghsa,packagist` |
-| `ECOSYSTEMS` | **Additive** -- merged with `composer` (auto-detected from your lockfile) | empty |
-| `VENDOR_FILTER` | **Additive** -- merged with vendor names parsed from your `composer.lock` (KEV filtering) | empty |
-| `NVD_CPE_PREFIX` | **Override** -- if set, replaces the auto-detected CPE. Auto-detection maps Magento edition: community -> `cpe:2.3:a:magento:magento`, enterprise -> `cpe:2.3:a:adobe:commerce` | auto |
-
-### Poll intervals (seconds)
-
-| Variable | Default | Notes |
-|---|---|---|
-| `POLL_INTERVAL_KEV` | 7200 | CISA KEV updates on business hours |
-| `POLL_INTERVAL_NVD` | 7200 | NIST recommends no more than every 2 hours |
-| `POLL_INTERVAL_GHSA` | 1800 | GitHub Advisories, 30 min |
-| `POLL_INTERVAL_OSV` | 1800 | OSV, 30 min |
-| `POLL_INTERVAL_PACKAGIST` | 3600 | Packagist, 1 hour |
-
-### Priority thresholds
-
-| Variable | Default | Description |
-|---|---|---|
-| `CVSS_CRITICAL_THRESHOLD` | 9.0 | P0 trigger when combined with EPSS |
-| `CVSS_HIGH_THRESHOLD` | 7.0 | P1 boundary |
-| `EPSS_HIGH_THRESHOLD` | 0.10 | 10% exploit probability threshold |
-
-## Priority system
-
-ASE only tracks and alerts on P0 and P1 findings. Anything below those thresholds is dropped before notification or persistence.
-
-| Priority | Criteria | Notification |
-|---|---|---|
-| **P0** Immediate | In CISA KEV, OR (CVSS >= 9.0 AND EPSS >= 10%) | `SLACK_WEBHOOK_URL`, exit code 2 |
-| **P1** Urgent | (CVSS >= 7.0 AND EPSS >= 10%), OR known ransomware, OR affects installed version with CVSS >= 7.0 | `SLACK_WEBHOOK_P1` if set, else skipped with a one-line warning. Exit code 1. |
-
-**Two-webhook model.** Slack incoming webhooks are channel-scoped. P0 always posts to `SLACK_WEBHOOK_URL` -- the only required webhook. P1 posts to a separate `SLACK_WEBHOOK_P1` webhook when you want those alerts in a different channel; leave it unset to suppress P1 alerts entirely.
-
-**Escalation re-notification:** If a vulnerability's priority increases (e.g., added to CISA KEV, EPSS spike), a new alert fires with escalation context, even if previously notified at a lower tier.
-
-## Getting API keys
-
-**NVD API Key** (free, 10x rate limit):
-1. https://nvd.nist.gov/developers/request-an-api-key
-2. Enter email, request key
-3. Set `NVD_API_KEY`
-
-**GitHub Token** (optional):
-1. https://github.com/settings/tokens
-2. Generate token (classic) -- no scopes needed for public advisories
-3. Set `GITHUB_TOKEN`
-
-**Slack Webhook**:
-1. https://api.slack.com/apps -- create a new app
-2. Enable Incoming Webhooks, add to target channel
-3. Set `SLACK_WEBHOOK_URL`
-
-KEV, EPSS, Packagist, and OSV (when enabled) need no authentication.
-
-## Advanced deployment
-
-For production you'll typically deploy under cron with dedicated log/state directories rather than relying on `composer global`'s user-scoped install.
-
-```bash
-git clone https://github.com/infinri/A.S.E.git /opt/ase
-cd /opt/ase
-composer install --no-dev --optimize-autoloader
-
-cp .env.example .env
-# edit .env -- at minimum set:
-#   SLACK_WEBHOOK_URL   (P0 alerts)
-#   COMPOSER_LOCK_PATH  (absolute path to your Magento project's composer.lock;
-#                        required for Magento monitoring -- enables edition
-#                        detection, vendor filter, CPE prefix, and installed-
-#                        version matching)
-
-sudo mkdir -p /var/lib/ase /var/log/ase /var/run/ase
-sudo chown "$(whoami)" /var/lib/ase /var/log/ase /var/run/ase
-```
-
-### Cron
-
-```crontab
-# Main run every 30 minutes, flock prevents overlap
-*/30 * * * * /usr/bin/flock -n /tmp/ase.lock /opt/ase/bin/ase >> /var/log/ase/cron.log 2>&1
-
-# Heartbeat, hourly
-30 * * * * /opt/ase/bin/heartbeat.sh
-```
-
-Feeds with longer poll intervals (KEV, NVD at 2h) automatically skip runs where their interval has not elapsed.
-
-### Disabling a feed
-
-Remove its name from `ENABLED_FEEDS` in `.env`. No code change needed.
-
-```
-ENABLED_FEEDS=kev,nvd
-# ghsa and packagist now skipped
-```
-
-### Enabling OSV
-
-OSV is off by default because Packagist advisories and GHSA both cover the Composer ecosystem already, and OSV aggregates GHSA. If you want OSV as a third cross-check, add it to the list:
-
-```
-ENABLED_FEEDS=kev,nvd,ghsa,packagist,osv
-```
-
-When enabled, OSV issues a single `POST /v1/querybatch` call populated from your `composer.lock` (one query per installed package), then hydrates each returned advisory via `/v1/vulns/{id}`.
-
-## State and troubleshooting
-
-ASE persists notification state to `STATE_FILE` (default `var/state/state.json`, or `/var/lib/ase/state.json` in the advanced-deployment layout below). The state file is what keeps you from getting re-alerted on the same CVE every run; it records which vulnerabilities have been notified and at what priority.
-
-**Reset state (force a silent re-import):**
-
-```bash
-rm /var/lib/ase/state.json
-# Next run will be treated as first-run: silent import, no Slack pings.
-```
-
-Do this if you misconfigured webhooks and got a partial flood, swapped feeds, or want a clean baseline against a newly-updated `composer.lock`. The state file contains no secrets -- only CVE IDs, priorities, and timestamps.
-
-## Self-monitoring
-
-- **Heartbeat:** `bin/heartbeat.sh` alerts via syslog if the last successful run was >24h ago.
-- **Feed health:** consecutive failures per feed are tracked; 3+ failures logs ERROR.
-- **Schema drift:** warnings on missing expected fields in API responses.
-- **Structured logs on stderr:** every log record is a JSON object carrying a per-run `run_id` (UUIDv4) so you can correlate across Datadog/Loki/CloudWatch. Credentials (Slack webhooks, GitHub tokens, NVD keys, Bearer headers, URL basic-auth) are masked by an in-process redactor before the handler writes.
-
-## Requirements
-
-- PHP 8.4+ with `curl`, `json`, `mbstring`, `openssl` at runtime (declared in `composer.json` `require`)
-- Composer 2.x for installation (`fileinfo` is needed during install, not at runtime)
-- `flock` (util-linux) if running under cron
-
-Optional: `pdo_sqlite` for a future state migration.
+First-run note: ase-alert alerts on every existing alert-worthy finding. For a quiet
+adoption, run it once before configuring `ASE_ALERT_ROUTES`; see the
+[runbook](docs/runbook.md), which also covers SLAs and what to do when an alert lands.
 
 ## Development
 
-```bash
-git clone https://github.com/infinri/A.S.E.git
-cd A.S.E
-composer install
+    composer test          # PHPUnit
+    composer stan          # PHPStan, level 8
 
-composer test           # phpunit
-composer stan           # phpstan level 8
-```
-
-## Architecture
-
-Deep dive: [`HANDBOOK.md`](HANDBOOK.md) covers module layout, scoring internals, feed contracts, state file schema, and operational playbook.
-
-## Releases
-
-See [`CHANGELOG.md`](CHANGELOG.md) for release history and upgrade notes. v1.x is in active development.
+CI gates merges on `composer audit`, PHPStan, and the test suite.
 
 ## License
 
-MIT. See [`LICENSE`](LICENSE).
-
-## Security
-
-Report vulnerabilities in ASE itself privately. See [`SECURITY.md`](SECURITY.md).
+MIT. See [LICENSE](LICENSE).

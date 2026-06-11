@@ -1,6 +1,6 @@
 {
     "name": "infinri/ase",
-    "description": "Automated Security Evaluator -- CVE monitoring for Magento / Adobe Commerce / Mage-OS stores. Polls KEV/NVD/GHSA/OSV/Packagist, prioritizes with CVSS+EPSS+KEV, alerts via Slack.",
+    "description": "Automated Security Evaluator -- Dependency-Track automation: syncs lockfile SBOMs and a declared-tech inventory, scores findings with CISA KEV + EPSS + CVSS, alerts per-team Slack channels on P0/P1.",
     "type": "library",
     "license": "MIT",
     "keywords": [
@@ -51,7 +51,8 @@
         }
     },
     "bin": [
-        "bin/ase"
+        "bin/ase-sync",
+        "bin/ase-alert"
     ],
     "scripts": {
         "test": "phpunit tests/Unit",
