@@ -6,7 +6,9 @@
 > **Rebuild in progress (2026-06).** A.S.E is being rebuilt around OWASP
 > Dependency-Track: Dependency-Track is the engine and UI
 > ([docs/dependency-track-install.md](docs/dependency-track-install.md)), and A.S.E
-> syncs project lockfiles into it (`bin/ase-sync`, configured via `ASE_PROJECTS`)
+> syncs project lockfiles and the declared-tech inventory
+> ([inventory/declared-tech.yaml](inventory/declared-tech.yaml)) into it
+> (`bin/ase-sync`, configured via `ASE_PROJECTS`)
 > and alerts per-team Slack channels with KEV/EPSS-scored P0/P1 findings
 > (`bin/ase-alert`, configured via `ASE_ALERT_ROUTES`).
 > Plans: [docs/planning/](docs/planning/). The original CLI documented below stays

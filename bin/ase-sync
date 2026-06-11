@@ -12,6 +12,7 @@ use Ase\Logging\CorrelationIdProcessor;
 use Ase\Logging\SecretRedactor;
 use Ase\Logging\SecretRedactorProcessor;
 use Ase\Sbom\ComposerLockSbomBuilder;
+use Ase\Sbom\DeclaredTechSbomBuilder;
 use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\StreamHandler;
 use Monolog\Logger;
@@ -43,6 +44,22 @@ foreach ($config->projects() as $name => $lockfilePath) {
     } catch (\Throwable $e) {
         $failures++;
         $logger->error('Sync failed for project', ['project' => $name, 'error' => $e->getMessage()]);
+    }
+}
+
+$inventoryPath = $config->inventoryPath();
+if ($inventoryPath !== null) {
+    try {
+        $boms = new DeclaredTechSbomBuilder()->buildPerOwner($inventoryPath);
+        foreach ($boms as $owner => $bom) {
+            $uploader->upload("Declared: {$owner}", 'main', $bom);
+        }
+        if ($boms === []) {
+            $logger->info('Declared-tech inventory has no entries yet', ['path' => $inventoryPath]);
+        }
+    } catch (\Throwable $e) {
+        $failures++;
+        $logger->error('Declared-tech sync failed', ['path' => $inventoryPath, 'error' => $e->getMessage()]);
     }
 }
 

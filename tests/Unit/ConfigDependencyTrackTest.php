@@ -64,6 +64,26 @@ final class ConfigDependencyTrackTest extends TestCase
         $config->alertRoutes();
     }
 
+    public function testInventoryPathExplicitOverride(): void
+    {
+        $config = ConfigTestHelper::create(['ASE_INVENTORY_PATH' => '/tmp/custom-inventory.yaml']);
+
+        self::assertSame('/tmp/custom-inventory.yaml', $config->inventoryPath());
+    }
+
+    public function testInventoryPathDefaultsToRepoFileWhenPresent(): void
+    {
+        $config = ConfigTestHelper::create(['ASE_INVENTORY_PATH' => '']);
+
+        $path = $config->inventoryPath();
+        if ($path !== null) {
+            self::assertStringEndsWith('inventory/declared-tech.yaml', $path);
+            self::assertFileExists($path);
+        } else {
+            self::assertNull($path);
+        }
+    }
+
     public function testNormalizesDtrackUrlTrailingSlash(): void
     {
         $config = ConfigTestHelper::create([

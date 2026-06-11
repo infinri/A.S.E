@@ -181,6 +181,16 @@ final class Config
         return $routes;
     }
 
+    public function inventoryPath(): ?string
+    {
+        $explicit = $this->getOptional('ASE_INVENTORY_PATH');
+        if ($explicit !== null) {
+            return $explicit;
+        }
+        $default = dirname(__DIR__) . '/inventory/declared-tech.yaml';
+        return is_file($default) ? $default : null;
+    }
+
     public function alertDefaultWebhook(): ?string
     {
         return $this->getOptional('ASE_ALERT_DEFAULT_WEBHOOK');

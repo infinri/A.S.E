@@ -33,6 +33,7 @@
         "ext-openssl": "*",
         "composer/semver": "^3.4",
         "monolog/monolog": "^3.10",
+        "symfony/yaml": "^8.1",
         "vlucas/phpdotenv": "^5.6"
     },
     "require-dev": {

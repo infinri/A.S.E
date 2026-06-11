@@ -1,0 +1,21 @@
+# Declared technology inventory: everything we run that has no manifest file.
+# Synced to Dependency-Track by bin/ase-sync as one project per owner
+# ("Declared: infra", "Declared: erp", ...). Edited via PR only.
+#
+# Rules (see docs/planning/vulnerability-management-platform.md section 4.2):
+# - Every entry has an owner team. No owner, no merge.
+# - Bump the version here whenever the real system is patched; a stale version
+#   produces false alerts or, worse, confident silence.
+# - cpe enables NVD matching for appliances/OS software. One-time lookup per
+#   entry at https://nvd.nist.gov/products/cpe/search. Entries without a cpe
+#   are inventory-only (visible, not matched).
+#
+# Entry shape:
+# - name: FortiGate 100F            # human-readable, shown in Dependency-Track
+#   vendor: fortinet                # optional, becomes the component group
+#   version: 7.2.8                  # the version actually deployed
+#   cpe: "cpe:2.3:o:fortinet:fortios:7.2.8:*:*:*:*:*:*:*"
+#   owner: infra                    # owning team; drives project grouping
+#   type: device                    # optional CycloneDX type, default: application
+#
+# No entries yet: populate in the WS3 workshop with infra and ERP leads.
