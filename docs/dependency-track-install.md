@@ -27,6 +27,19 @@ reverse proxy for real access.
 
 First boot pulls vulnerability feeds; allow time before findings appear.
 
+## Enable OSV (required, once)
+
+A fresh 5.0.0 instance mirrors only NVD and EPSS. NVD matches by CPE, so composer and
+npm components produce zero findings until the OSV source is enabled, and silence here
+looks exactly like "no vulnerabilities". 5.0.0 has no UI or API for this; run:
+
+    bin/dtrack-enable-osv.sh                # defaults: Packagist,npm ecosystems
+
+The OSV mirror runs at the next 03:00 UTC cron; the script header documents how to
+force an immediate mirror. Verify afterwards in the logs:
+
+    docker logs dtrack-apiserver 2>&1 | grep 'vulnDataSourceName=osv'
+
 ## Bootstrap (browser, once)
 
 1. http://localhost:8081, admin/admin, forced password change; store the credential.
