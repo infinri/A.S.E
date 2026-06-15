@@ -8,7 +8,8 @@ Security fixes land on the latest minor release. Older minors are not patched.
 
 | Version | Supported |
 |---------|-----------|
-| 1.0.x   | Yes       |
+| 2.0.x   | Yes       |
+| 1.0.x   | No (legacy feed-polling CLI, preserved at tag `mvp-final`) |
 | < 1.0   | No        |
 
 ## Reporting a Vulnerability
@@ -47,7 +48,8 @@ Low-severity issues may take longer; you'll get a status update at least every 1
 
 ## Out of Scope
 
-- Vulnerabilities in third-party feeds ASE polls (CISA KEV, NVD, GHSA, OSV, Packagist) -- report those upstream.
+- Vulnerabilities in OWASP Dependency-Track -- report those to the Dependency-Track project.
+- Vulnerabilities in the vulnerability feeds (CISA KEV, which ASE reads directly; NVD/OSV/EPSS, which Dependency-Track mirrors) -- report those upstream.
 - Vulnerabilities in third-party services (Slack) -- report to the service operator.
 - Vulnerabilities requiring a compromised ASE host to exploit -- ASE runs with the privileges of the user who launched it; host security is out of scope.
 - Missing hardening features that don't correspond to a concrete exploit path -- open a regular issue or PR instead.

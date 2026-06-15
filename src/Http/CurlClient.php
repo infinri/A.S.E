@@ -8,7 +8,7 @@ use Psr\Log\LoggerInterface;
 
 class CurlClient
 {
-    private const string USER_AGENT = 'A.S.E./1.0 (vulnerability-monitor)';
+    private const string USER_AGENT = 'A.S.E./2.0 (vulnerability-monitor)';
     private const int CONNECT_TIMEOUT = 10;
     private const int TIMEOUT = 30;
     private const int MAX_FILE_SIZE = 10_485_760; // 10MB

@@ -4,16 +4,17 @@
     "type": "library",
     "license": "MIT",
     "keywords": [
-        "magento",
-        "adobe-commerce",
-        "mage-os",
         "security",
         "vulnerability",
         "cve",
+        "dependency-track",
+        "sbom",
+        "cyclonedx",
         "monitoring",
         "cli",
         "composer",
-        "slack"
+        "slack",
+        "magento"
     ],
     "authors": [
         {
@@ -31,7 +32,6 @@
         "ext-json": "*",
         "ext-mbstring": "*",
         "ext-openssl": "*",
-        "composer/semver": "^3.4",
         "monolog/monolog": "^3.10",
         "symfony/yaml": "^8.1",
         "vlucas/phpdotenv": "^5.6"

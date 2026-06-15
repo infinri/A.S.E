@@ -25,5 +25,5 @@ jobs:
       - name: PHPStan
         run: vendor/bin/phpstan analyse --no-progress
 
-      - name: PHPUnit (network-dependent CLI test excluded)
-        run: vendor/bin/phpunit tests/Unit --filter '^((?!CliIntegration).)*$'
+      - name: PHPUnit
+        run: vendor/bin/phpunit tests/Unit

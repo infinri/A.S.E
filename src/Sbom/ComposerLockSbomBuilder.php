@@ -7,7 +7,7 @@ namespace Ase\Sbom;
 final class ComposerLockSbomBuilder
 {
     /**
-     * Convert a composer.lock into a CycloneDX 1.5 BOM array.
+     * Convert a composer.lock into a CycloneDX 1.5 BOM array (production packages only).
      *
      * @return array<string, mixed>
      */
@@ -35,8 +35,10 @@ final class ComposerLockSbomBuilder
         }
 
         $components = [];
+        // Production packages only: a production deploy runs `composer install --no-dev`,
+        // so packages-dev is excluded to avoid alerting on dev-only dependencies.
         /** @var array<int, array<string, mixed>> $packages */
-        $packages = array_merge($lock['packages'] ?? [], $lock['packages-dev'] ?? []);
+        $packages = $lock['packages'] ?? [];
         foreach ($packages as $package) {
             $name = (string) ($package['name'] ?? '');
             $version = ltrim((string) ($package['version'] ?? ''), 'v');

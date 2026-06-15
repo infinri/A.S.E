@@ -11,7 +11,7 @@ final class Config
     /** @var array<string, string> */
     private readonly array $env;
 
-    public function __construct(?string $envPath = null, private readonly ?string $sinceDate = null)
+    public function __construct(?string $envPath = null)
     {
         $path = $envPath ?? dirname(__DIR__);
 
@@ -24,99 +24,6 @@ final class Config
         }
 
         $this->env = $_ENV;
-    }
-
-    /** @return string[] */
-    public function enabledFeeds(): array
-    {
-        $feeds = $this->get('ENABLED_FEEDS', 'kev,nvd,ghsa,packagist');
-        return array_map('trim', explode(',', $feeds));
-    }
-
-    public function isFeedEnabled(string $feed): bool
-    {
-        return in_array($feed, $this->enabledFeeds(), true);
-    }
-
-    public function nvdApiKey(): ?string
-    {
-        return $this->getOptional('NVD_API_KEY');
-    }
-
-    public function githubToken(): ?string
-    {
-        return $this->getOptional('GITHUB_TOKEN');
-    }
-
-    public function slackWebhookUrl(): ?string
-    {
-        return $this->getOptional('SLACK_WEBHOOK_URL');
-    }
-
-    public function slackWebhookP1(): ?string
-    {
-        return $this->getOptional('SLACK_WEBHOOK_P1');
-    }
-
-    public function pollInterval(string $feed): int
-    {
-        $key = 'POLL_INTERVAL_' . strtoupper($feed);
-        return (int) $this->get($key, '7200');
-    }
-
-    /** @return string[] */
-    public function ecosystems(): array
-    {
-        $value = $this->get('ECOSYSTEMS', 'composer,npm');
-        return array_map('trim', explode(',', $value));
-    }
-
-    /** @return string[] */
-    public function vendorFilter(): array
-    {
-        $value = $this->get('VENDOR_FILTER', 'adobe,magento');
-        return array_map('trim', explode(',', $value));
-    }
-
-    public function nvdCpePrefix(): ?string
-    {
-        return $this->getOptional('NVD_CPE_PREFIX');
-    }
-
-    public function stateFilePath(): string
-    {
-        return $this->get('STATE_FILE', '/var/lib/ase/state.json');
-    }
-
-    public function logFileLevel(): int
-    {
-        $raw = strtoupper($this->get('LOG_FILE_LEVEL', 'INFO'));
-        return match ($raw) {
-            'DEBUG' => \Monolog\Level::Debug->value,
-            'INFO' => \Monolog\Level::Info->value,
-            'NOTICE' => \Monolog\Level::Notice->value,
-            'WARNING' => \Monolog\Level::Warning->value,
-            'ERROR' => \Monolog\Level::Error->value,
-            'CRITICAL' => \Monolog\Level::Critical->value,
-            'ALERT' => \Monolog\Level::Alert->value,
-            'EMERGENCY' => \Monolog\Level::Emergency->value,
-            default => throw new \InvalidArgumentException("Unknown LOG_FILE_LEVEL: {$raw}"),
-        };
-    }
-
-    public function logFilePath(): string
-    {
-        return $this->get('LOG_FILE', '/var/log/ase/ase.log');
-    }
-
-    public function heartbeatFilePath(): string
-    {
-        return $this->get('HEARTBEAT_FILE', '/var/run/ase/last_success.txt');
-    }
-
-    public function composerLockPath(): ?string
-    {
-        return $this->getOptional('COMPOSER_LOCK_PATH');
     }
 
     public function dtrackUrl(): string
@@ -214,16 +121,6 @@ final class Config
     public function cvssHighThreshold(): float
     {
         return (float) $this->get('CVSS_HIGH_THRESHOLD', '7.0');
-    }
-
-    public function sinceDate(): ?string
-    {
-        return $this->sinceDate;
-    }
-
-    public function backfillDays(): int
-    {
-        return (int) $this->get('BACKFILL_DAYS', '30');
     }
 
     private function get(string $key, string $default = ''): string

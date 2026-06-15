@@ -35,7 +35,7 @@ final class ComposerLockSbomBuilderTest extends TestCase
 
         self::assertSame('CycloneDX', $bom['bomFormat']);
         self::assertSame('1.5', $bom['specVersion']);
-        self::assertCount(2, $bom['components']);
+        self::assertCount(1, $bom['components']);
         self::assertSame([
             'type' => 'library',
             'group' => 'monolog',
@@ -43,7 +43,14 @@ final class ComposerLockSbomBuilderTest extends TestCase
             'version' => '3.5.0',
             'purl' => 'pkg:composer/monolog/monolog@3.5.0',
         ], $bom['components'][0]);
-        self::assertSame('pkg:composer/phpunit/phpunit@11.0.1', $bom['components'][1]['purl']);
+    }
+
+    public function testExcludesDevDependencies(): void
+    {
+        $bom = new ComposerLockSbomBuilder()->build($this->lockPath);
+
+        $purls = array_column($bom['components'], 'purl');
+        self::assertNotContains('pkg:composer/phpunit/phpunit@11.0.1', $purls);
     }
 
     public function testThrowsOnMissingLockfile(): void

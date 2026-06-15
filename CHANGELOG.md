@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Post-2.0 cleanup: removed code and configuration left behind by the Dependency-Track
+rebuild, and a finding-scope fix.
+
+### Changed
+
+- `bin/ase-sync` SBOMs now contain production packages only; `composer.lock`
+  `packages-dev` entries are excluded. Dev-only dependencies (test runners, etc.)
+  no longer generate P1 alerts indistinguishable from production findings.
+- `CurlClient` User-Agent corrected to `A.S.E./2.0`.
+- Technical handbook (`HANDBOOK.md`) and `SECURITY.md` rewritten for the 2.0
+  architecture; both still described the removed 1.0 feed-polling CLI.
+
+### Removed
+
+- Dead `Config` accessors carried over from the 1.0 feed poller and unused since 2.0:
+  `enabledFeeds`, `isFeedEnabled`, `nvdApiKey`, `githubToken`, `slackWebhookUrl`,
+  `slackWebhookP1`, `pollInterval`, `ecosystems`, `vendorFilter`, `nvdCpePrefix`,
+  `stateFilePath`, `logFileLevel`, `logFilePath`, `heartbeatFilePath`,
+  `composerLockPath`, `backfillDays`, `sinceDate` (and the constructor's `$sinceDate`
+  argument), plus their unit tests.
+- Unused `composer/semver` production dependency (Dependency-Track performs version
+  matching now).
+- Stale CI test filter excluding a `CliIntegration` test that no longer exists.
+
 ## [2.0.0] - 2026-06-11
 
 Rebuilt around OWASP Dependency-Track. The engine, UI, dashboards, and feed
@@ -106,4 +132,6 @@ First public release. CVE monitoring for Magento / Adobe Commerce / Mage-OS stor
 - NVD 404 caused by whitespace-corrupted API keys -- handled by env-trim in `Config::getOptional()`.
 - NVD 404 error message broadened to mention both `NVD_API_KEY` and `NVD_CPE_PREFIX` as likely causes (was attributing 404s to API key alone).
 
+[Unreleased]: https://github.com/infinri/A.S.E/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/infinri/A.S.E/releases/tag/v2.0.0
 [1.0.0]: https://github.com/infinri/A.S.E/releases/tag/v1.0.0
